@@ -1,0 +1,76 @@
+\documentclass[12pt,a4paper,twoside]{book}
+
+
+\usepackage[a4paper,inner=3.5cm,outer=2.5cm]{geometry}
+\usepackage[titletoc,title,toc,page]{appendix}
+\usepackage{verbatim}
+\usepackage{placeins}
+\usepackage{listings}
+\usepackage[italian]{babel}
+\usepackage{tikz}
+\usepackage{parskip}
+\usepackage{graphicx}
+\usepackage{blindtext}
+\usepackage{chngcntr}
+\counterwithin{table}{chapter}
+\usepackage{newlfont}
+\usepackage{fancyhdr}
+\usepackage{indentfirst}
+\usepackage[utf8]{inputenc}
+\usepackage{float}
+\usepackage{hyperref}
+\usepackage[capitalize,noabbrev]{cleveref}
+\usepackage{soul}
+\usepackage[font=footnotesize,labelfont=bf]{caption}
+\usepackage{multirow}
+\usepackage{hyphenat}
+\hyphenation{mate-mati-ca recu-perare}
+
+\usepackage{lscape}
+
+\usepackage{natbib}
+\bibliographystyle{unsrt}
+\setcitestyle{numbers,open={[},close={]}}
+
+\newcommand{\rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
+
+\usepackage{pdfpages}
+
+\begin{document}
+% Per spostare i vari elementi più su o più giù gioca con i valori di vspace che ci sono tra uno e l'altro
+    \pagestyle{empty}
+    \newgeometry{
+        left=20mm,
+        right=20mm,
+        top=20mm,
+        bottom=20mm
+    }
+
+    \input{inc/00-frontespizio}
+    \newpage~\newpage
+    \input{inc/01-dedica}
+    \newpage~\newpage
+    \input{inc/02-abstract}
+    \newpage~\newpage
+    \input{inc/03-indici}
+    \newpage~\newpage
+
+    % settings
+    \pagenumbering{arabic}
+    \setcounter{chapter}{-1}
+    \raggedbottom
+
+
+    % thesis starts here
+    \input{inc/10-introduction}
+
+    %thesis ends here
+
+
+    \chapter*{Riferimenti bibliografici}
+    \bibliography{refs}
+    \newpage~\newpage
+    \input{inc/19-appendici}
+    \newpage~\newpage
+    \input{inc/99-ringraziamenti}
+\end{document}
