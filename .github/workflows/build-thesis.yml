@@ -1,4 +1,4 @@
-name: Build and publish Latex
+name: Build and release thesis
 
 on:
   push:
@@ -11,47 +11,30 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build Thesis
+    name: Build
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Compile thesis
         uses: xu-cheng/latex-action@v4
         with:
           root_file: src/main.tex
           work_in_root_file_dir: true
           texlive_version: 2024
-      - name: Generate build artifact
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: build
+          name: thesis
           path: src/main.pdf
 
-  deploy:
-    name: Deploy thesis
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}/main.pdf
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/main'
-    permissions:
-      pages: write
-      id-token: write
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
+      - name: Release thesis
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
         with:
-          name: build
-          path: site
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          tag_name: latest
+          name: Latest build
+          files: src/main.pdf
