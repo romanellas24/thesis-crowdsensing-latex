@@ -21,7 +21,7 @@ jobs:
       - name: Compile thesis
         uses: xu-cheng/latex-action@v4
         with:
-          root_file: main.tex
+          root_file: src/main.tex
           work_in_root_file_dir: true
           texlive_version: 2024
 
@@ -29,7 +29,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: thesis
-          path: main.pdf
+          path: src/main.pdf
 
       - name: Release thesis
         uses: softprops/action-gh-release@v2
@@ -37,4 +37,4 @@ jobs:
         with:
           tag_name: latest
           name: Latest build
-          files: main.pdf
+          files: src/main.pdf
