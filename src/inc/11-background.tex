@@ -1,8 +1,21 @@
 \chapter{Background} \label{ch:background}
+Server architecture defines how nodes communicate and interact over a network.
+The most common architectural models are introduced in the following subsections.
 \section{Server architectures} \label{sec:server-architectures}
-\subsection{Distributed systems} \label{subsec:distributed-systems}
-\subsection{Client-Server} \label{subsec:client-server}
+The client-server architecture is one of the most widely adopted
+architectural models \cite{van2002distributed}.
+It involves two types of nodes:
+\begin{itemize}
+    \item \textbf{Server}: the node responsible for delivering content
+    and services to clients, maintained by the service provider.
+    \item \textbf{Client}: the node that communicates with the server
+    to request a specific service or resource.
+\end{itemize}
+These two node types communicate with each other following a
+request-response model, where the client initiates the interaction
+and the server responds accordingly.
 \subsection{Peer-to-peer} \label{subsec:peer-to-peer}
+\subsection{Distributed systems} \label{subsec:distributed-systems}
 \subsection{IPFS} \label{subsec:ipfs}
 \section{Blockchain}\label{sec:blockchain}
 \subsection{Ethereum}\label{subsec:eth}
