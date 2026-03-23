@@ -1,9 +1,11 @@
 \chapter{Background} \label{ch:background}
+This chapter introduces all the background concepts required to understand the protocol and the context in which it works.
+\section{Server architectures} \label{sec:server-architectures}
 Server architecture defines how nodes communicate and interact over a network.
 The most common architectural models are introduced in the following subsections.
-\section{Server architectures} \label{sec:server-architectures}
+\subsection{Client-Server} \label{subsec:client-server}
 The client-server architecture is one of the most widely adopted
-architectural models \cite{van2002distributed}.
+architectural models~\cite{van2002distributed}.
 It involves two types of nodes:
 \begin{itemize}
     \item \textbf{Server}: the node responsible for delivering content
@@ -14,7 +16,28 @@ It involves two types of nodes:
 These two node types communicate with each other following a
 request-response model, where the client initiates the interaction
 and the server responds accordingly.
+\newline
+Some protocols based on Client-Server architectures are:
+\begin{itemize}
+    \item \textbf{HTTP}: Client sends an HTTP Request and receives an HTTP Response~\cite{rfc9110}
+    \item \textbf{DNS}: Client (Resolver) sends a DNS Query to DNS server to resolve a name~\cite{rfc1034}
+    \item \textbf{DHCP}: Client broadcasts a DHCP request over all the local network and if a DHCP server is listening it will handle the IP assignation~\cite{rfc2131}
+\end{itemize}
+
 \subsection{Peer-to-peer} \label{subsec:peer-to-peer}
+Peer-to-peer architectures are adopted in contexts where a single server is not able to guarantee a service, where the decentralization is a required property for the model or where the goal is to remove a single point of failure. \cite{van2002distributed}
+\newline
+In a peer-to-peer context all nodes act as both client and server, simultaneously.
+Each node is called \texttt{peer}, and it is able to request and provide resources to other peers.
+\newline
+In peer-to-peer protocols there is a challenge: peer discovery.
+Peer discovery is a mechanism that allows the peer to locate others ones to communicate with.
+Common approaches include centralized trackers, where a server maintains a list of active peers, and distributed hash tables (DHT), where the
+peer information is distributed across the network~\cite{maymounkov2002kademlia}.
+\newline
+An example of a peer-to-peer protocol is BitTorrent~\cite{cohen2003incentives}, widely used for distributed file sharing.
+The peer-to-peer model also serves as the foundation for distributed storage systems such as IPFS, discussed
+in the following subsection.
 \subsection{Distributed systems} \label{subsec:distributed-systems}
 \subsection{IPFS} \label{subsec:ipfs}
 \section{Blockchain}\label{sec:blockchain}
