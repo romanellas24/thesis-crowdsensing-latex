@@ -1,8 +1,11 @@
 \chapter{Background} \label{ch:background}
 This chapter introduces all the background concepts required to understand the protocol and the context in which it works.
-\section{Server architectures} \label{sec:server-architectures}
-Server architecture defines how nodes communicate and interact over a network.
+\section{Network architectures} \label{sec:network-architectures}
+Network architecture defines how nodes communicate and interact over a network.
 The most common architectural models are introduced in the following subsections.
+\subsection{Distributed systems} \label{subsec:distributed-systems}
+A distributed system is a collection of independent nodes that communicate and coordinate over a network to appear as a single coherent system~\cite{van2002distributed}.
+This model enables horizontal scaling and eliminates single points of failure, making it suitable for high availability applications.
 \subsection{Client-Server} \label{subsec:client-server}
 The client-server architecture is one of the most widely adopted
 architectural models~\cite{van2002distributed}.
@@ -19,28 +22,37 @@ and the server responds accordingly.
 \newline
 Some protocols based on Client-Server architectures are:
 \begin{itemize}
-    \item \textbf{HTTP}: Client sends an HTTP Request and receives an HTTP Response~\cite{rfc9110}
-    \item \textbf{DNS}: Client (Resolver) sends a DNS Query to DNS server to resolve a name~\cite{rfc1034}
+    \item \textbf{HTTP}: Client sends an HTTP request and receives an HTTP Response~\cite{rfc9110}
+    \item \textbf{DNS}: Client (Resolver) sends a DNS query to DNS server to resolve a name~\cite{rfc1034}
     \item \textbf{DHCP}: Client broadcasts a DHCP request over all the local network and if a DHCP server is listening it will handle the IP assignation~\cite{rfc2131}
 \end{itemize}
 
 \subsection{Peer-to-peer} \label{subsec:peer-to-peer}
-Peer-to-peer architectures are adopted in contexts where a single server is not able to guarantee a service, where the decentralization is a required property for the model or where the goal is to remove a single point of failure. \cite{van2002distributed}
-\newline
+Peer-to-peer architectures are adopted in contexts where a single server is not able to guarantee a service, where the decentralization is a required property for the model or where the goal is to remove a single point of failure.~\cite{van2002distributed}
+
 In a peer-to-peer context all nodes act as both client and server, simultaneously.
 Each node is called \texttt{peer}, and it is able to request and provide resources to other peers.
-\newline
-In peer-to-peer protocols there is a challenge: peer discovery.
-Peer discovery is a mechanism that allows the peer to locate others ones to communicate with.
-Common approaches include centralized trackers, where a server maintains a list of active peers, and distributed hash tables (DHT), where the
-peer information is distributed across the network~\cite{maymounkov2002kademlia}.
-\newline
+
+In peer-to-peer protocols there is a challenge: peer discovery,
+the mechanism by which a node locates other peers to communicate with.
+A common approach is centralized trackers, where a server maintains a list
+of active peers, but this reintroduces a single point of failure.
+Distributed hash tables (DHT) solve this by distributing peer information
+across the network itself, removing any central dependency~\cite{maymounkov2002kademlia}.
+
 An example of a peer-to-peer protocol is BitTorrent~\cite{cohen2003incentives}, widely used for distributed file sharing.
 The peer-to-peer model also serves as the foundation for distributed storage systems such as IPFS, discussed
 in the following subsection.
-\subsection{Distributed systems} \label{subsec:distributed-systems}
 \subsection{IPFS} \label{subsec:ipfs}
+IPFS (InterPlanetary File System) is a peer-to-peer distributed file system that enables efficient and reliable data distribution among all nodes~\cite{benet2014ipfs}.
+Unlike traditional location based addressing, each piece of content is identified by its cryptographic hash, known as a Content Identifier (CID).
+The protocol works in the following way: every node hosts and shares a portion of the data, when a client requests a specific CID, it uses the DHT to retrieve the data from the nodes that store it.
+In addition, IPFS is a versioned file system and it supports integration with decentralized applications, offering a storage layer for blockchains and Web3 ecosystems.
 \section{Blockchain}\label{sec:blockchain}
+A blockchain is a growing distributed ledger that stores data in an ordered sequence of blocks~\cite{bitcoin}.
+Each block contains a set of transactions, the hash of the previous block, and a timestamp; this structure creates a chain.
+This chained structure makes the blockchain transactions resistant to alteration, because, when the transactions are registered,
+an adversary $\mathcal{A}$ would need to produce a block with the same hash, which is infeasible in probabilistic polynomial time~\cite{bitcoin}.
 \subsection{Ethereum}\label{subsec:eth}
 \subsection{Smart Contract}\label{subsec:sc}
 \subsection{Gas}\label{subsec:gas}
