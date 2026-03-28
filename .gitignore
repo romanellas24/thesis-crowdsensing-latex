@@ -312,4 +312,5 @@ TSWLatexianTemp*
 
 #IDE
 .idea
+.venv
 out/
