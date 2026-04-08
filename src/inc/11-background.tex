@@ -53,8 +53,51 @@ A blockchain is a growing distributed ledger that stores data in an ordered sequ
 Each block contains a set of transactions, the hash of the previous block, and a timestamp; this structure creates a chain.
 This chained structure makes the blockchain transactions resistant to alteration, because, when the transactions are registered,
 an adversary $\mathcal{A}$ would need to produce a block with the same hash, which is infeasible in probabilistic polynomial time~\cite{bitcoin}.
+
 \subsection{Ethereum}\label{subsec:eth}
-\subsection{Smart Contract}\label{subsec:sc}
-\subsection{Gas}\label{subsec:gas}
+Ethereum is an open source, decentralized blockchain platform created by Vitalik Buterin~\cite{ethereum} in 2013.
+Bitcoin was primarily designed as a decentralized digital currency and distributed financial ledger,
+but Ethereum expanded the capabilities of blockchain technologies by introducing a programmable environment~\cite{ethereum}.
+
+\subsubsection{Smart Contracts}
+The core Ethereum architecture introduced the concept of \emph{Smart Contracts}.
+These are deterministic and self-executing programs stored directly on the blockchain, where the terms of an agreement or the logic of an application are encoded into lines of code.
+When predetermined conditions are met, smart contracts execute automatically and autonomously, eliminating the need for trusted third-party intermediaries.
+Smart contracts are written in a Turing-complete programming language~\cite{ethereum}.
+The execution of these contracts is handled by the \emph{Ethereum Virtual Machine} (EVM).
+
+The EVM is an isolated runtime environment that computes and maintains the global state of the Ethereum network.
+Every node participating in the network runs an instance of the EVM, ensuring that all state transitions are processed redundantly and validated by the network consensus algorithm.
+This distributed computation guarantees the integrity, immutability, and security of the system.
+
+\subsubsection{Gas}
+To allocate computational resources and mitigate malicious behaviors such as spam or infinite loops, Ethereum employs a pricing mechanism known as \emph{Gas}.
+Every operation executed within the EVM requires a specific amount of computational effort, which must be compensated.
+Users initiate transactions and pay these gas fees using Wei.
+\[
+    1 \text{ETH} = 10^{18} \text{wei}
+\]
+Ether (ETH) is the network's native cryptocurrency, thereby incentivizing network validators to process and include their transactions in the next block.
+
+\subsubsection{Account types}
+The Ethereum state is managed through a system of accounts.
+There are two primary types of accounts: \emph{Externally Owned Accounts} (EOAs), which are controlled by cryptographic private keys and typically managed by human users, and \emph{Contract Accounts}, which are governed entirely by their underlying smart contract code.
+Historically, Ethereum relied on a Proof-of-Work (PoW) consensus mechanism to secure the network.
+
+\subsubsection{Proof-of-Stake and The Merge}
+Historically, Ethereum relied on a Proof-of-Work (PoW) consensus mechanism, where miners expended vast amounts of computational power to secure the network.
+However, on September 15, 2022, the network executed a major architectural upgrade known as \texttt{The Merge}.
+This event merged the original execution layer (Ethereum Mainnet) with a newly developed consensus layer (the Beacon Chain), effectively transitioning the entire network to a Proof-of-Stake (PoS) protocol \cite{kelly2023event}.
+Conceptually, PoS replaces energy-intensive mining with financial staking.
+To participate as a validator, a user must lock up (or \texttt{stake}) 32 Ether (ETH) into a designated smart contract.
+Instead of competing to solve arbitrary cryptographic puzzles, validators are pseudo-randomly selected by the protocol to propose new blocks or attest to the validity of blocks proposed by others.
+Honest participation is incentivized through block rewards and transaction fees.
+Conversely, malicious behavior or failure to fulfill validation duties is penalized through a mechanism called \texttt{slashing} which confiscates a portion of the validator's staked funds.
+The shift to PoS drastically reduced the network's energy consumption by approximately 99.98\% \cite{kelly2023event}.
+For a decentralized crowdsensing system, this paradigm shift is of paramount importance.
+Under the previous PoW model, participating in the network required specialized, expensive hardware (such as ASICs or high-end GPUs) and incurred prohibitive electricity costs.
+In contrast, PoS significantly lowers the technical and financial barrier to running a node.
+In PoS, an adversary would need to control over 50\% of the total staked ETH to compromise the network, which is economically prohibitive~\cite{ethereum51}.
+
 \section{Crowdsensing}\label{sec:crowdsensing}
 \section{Related work and state of the art} \label{sec:related-work}
