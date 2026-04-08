@@ -87,7 +87,7 @@ Historically, Ethereum relied on a Proof-of-Work (PoW) consensus mechanism to se
 \subsubsection{Proof-of-Stake and The Merge}
 Historically, Ethereum relied on a Proof-of-Work (PoW) consensus mechanism, where miners expended vast amounts of computational power to secure the network.
 However, on September 15, 2022, the network executed a major architectural upgrade known as \texttt{The Merge}.
-This event merged the original execution layer (Ethereum Mainnet) with a newly developed consensus layer (the Beacon Chain), effectively transitioning the entire network to a Proof-of-Stake (PoS) protocol \cite{kelly2023event}.
+This event merged the original execution layer (Ethereum Mainnet) with a newly developed consensus layer (the Beacon Chain), effectively transitioning the entire network to a Proof-of-Stake (PoS) protocol~\cite{kelly2023event}.
 Conceptually, PoS replaces energy-intensive mining with financial staking.
 To participate as a validator, a user must lock up (or \texttt{stake}) 32 Ether (ETH) into a designated smart contract.
 Instead of competing to solve arbitrary cryptographic puzzles, validators are pseudo-randomly selected by the protocol to propose new blocks or attest to the validity of blocks proposed by others.
@@ -100,4 +100,30 @@ In contrast, PoS significantly lowers the technical and financial barrier to run
 In PoS, an adversary would need to control over 50\% of the total staked ETH to compromise the network, which is economically prohibitive~\cite{ethereum51}.
 
 \section{Crowdsensing}\label{sec:crowdsensing}
+Crowdsensing is a technique that uses the collective sensing capabilities of individuals, who collect and share data about their surrounding environment, usually leveraging user's devices sensors~\cite{ganti2011mobile}.
+The crowdsensing campaign can be participatory, in this case the users actively collect and upload data or opportunistic: in this case the data are collected and sent in background without any effort form the user.
+There are several actors:
+\begin{itemize}
+    \item Participants: People or devices which share data
+    \item Requester: An entity that requires specific data and sets up the campaign
+    \item Platform: A system that collects and processes data
+\end{itemize}
+Crowdsensing has been applied across several domains.
+In environmental monitoring, it enables large-scale data
+collection about air quality and pollution~\cite{kang2017crowdsensing}.
+In traffic and transportation, it supports real-time infrastructure monitoring using sensors embedded in vehicles~\cite{mei2020crowdsensing}.
+In healthcare, it has been used to model patient flows and support medical monitoring~\cite{lane2010survey}.
+These applications share a common requirement: reliable, privacy-preserving data collection at scale~\cite{ganti2011mobile}.
+
+\subsection{Challenges}
+This approach presents several challenges:
+\begin{itemize}
+    \item Data quality and data sparsity: data often suffers from noise, outliers and gaps because of uneven geographic distribution of participants in a certain area~\cite{lane2010survey, ganti2011mobile}.
+    \item Privacy and Security: collecting data strictly related to real-world location threatens participants' privacy~\cite{ganti2011mobile}.
+    \item Resource constraints: high-frequency sensing and measurements can drain devices' battery and consume a significant network bandwidth~\cite{lane2010survey}.
+    \item System heterogeneity: since the crowdsensing campaign is made using the personal devices of the users, the system required to handle data from different devices~\cite{lane2010survey}.
+\end{itemize}
+
+Among these, data privacy and data quality are the primary challenges that the proposed protocol aims to address~\cite{ganti2011mobile, lane2010survey}.
+
 \section{Related work and state of the art} \label{sec:related-work}
