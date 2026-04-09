@@ -100,7 +100,7 @@ In contrast, PoS significantly lowers the technical and financial barrier to run
 In PoS, an adversary would need to control over 50\% of the total staked ETH to compromise the network, which is economically prohibitive~\cite{ethereum51}.
 
 \section{Crowdsensing}\label{sec:crowdsensing}
-Crowdsensing is a technique that uses the collective sensing capabilities of individuals, who collect and share data about their surrounding environment, usually leveraging user's devices sensors~\cite{ganti2011mobile}.
+Crowdsensing, or Mobile Crowdsensing (MSC), is a technique that uses the collective sensing capabilities of individuals, who collect and share data about their surrounding environment, usually leveraging user's devices sensors~\cite{ganti2011mobile}.
 The crowdsensing campaign can be participatory, in this case the users actively collect and upload data or opportunistic: in this case the data are collected and sent in background without any effort form the user.
 There are several actors:
 \begin{itemize}
@@ -118,7 +118,7 @@ These applications share a common requirement: reliable, privacy-preserving data
 \subsection{Challenges}
 This approach presents several challenges:
 \begin{itemize}
-    \item Data quality and data sparsity: data often suffers from noise, outliers and gaps because of uneven geographic distribution of participants in a certain area~\cite{lane2010survey, ganti2011mobile}.
+    \item Data quality and data sparsity: data often suffers from noise, outliers and gaps because of uneven geographic distribution of participants in a certain area~\cite{ganti2011mobile, lane2010survey}.
     \item Privacy and Security: collecting data strictly related to real-world location threatens participants' privacy~\cite{ganti2011mobile}.
     \item Resource constraints: high-frequency sensing and measurements can drain devices' battery and consume a significant network bandwidth~\cite{lane2010survey}.
     \item System heterogeneity: since the crowdsensing campaign is made using the personal devices of the users, the system required to handle data from different devices~\cite{lane2010survey}.
@@ -127,3 +127,93 @@ This approach presents several challenges:
 Among these, data privacy and data quality are the primary challenges that the proposed protocol aims to address~\cite{ganti2011mobile, lane2010survey}.
 
 \section{Related work and state of the art} \label{sec:related-work}
+Mobile crowdsensing leverages the sensing capabilities of everyday
+mobile devices to collect data at scale, avoiding the cost of deploying
+dedicated sensor infrastructure~\cite{capponi2019survey}.
+
+Early MCS platforms adopted centralized architectures, where a trusted server mediates
+task assignment, data collection, and reward distribution.
+While effective, this design introduces a single point of failure, requires participants to
+trust the platform operator with their data, and creates privacy
+vulnerabilities through exposed communication channels~\cite{chen2021survey}.
+
+The integration of blockchain technology into MCS has been explored
+extensively as a means to decentralize platform control and remove the need
+for a trusted intermediary.
+Several surveys~\cite{chen2021survey, yu2023blockchain} provide
+comprehensive overviews of this convergence.
+Smart contracts enable automated task management, verifiable reward distribution, and transparent data
+provenance without relying on a central authority.
+Systems such as CrowdBLPS~\cite{zou2019crowdblps} employ blockchain-based
+location-privacy preservation for crowdsensing, while ABCrowd~\cite{kadadha2020abcrowd} introduces reverse auctions
+as an incentive mechanism in a decentralized ecosystem.
+
+BlockSense~\cite{huang2022blocksense} proposes a dedicated blockchain
+for crowdsensing built on a Proof-of-Data consensus algorithm, using
+zk-SNARKs and homomorphic encryption to verify data quality.
+Chatzopoulos et al.~\cite{chatzopoulos2018privacy} designed a spatial
+crowdsensing system where smart contracts manage both privacy and
+cost-optimal task allocation.
+More recently, Gigli et al.~\cite{gigli2024decentralization} presented an architectural
+vision for decentralizing MCS on distributed ledgers.
+
+Despite the inherent pseudonymity of blockchain addresses, privacy remains a
+significant challenge in blockchain-based MCS. Transaction metadata,
+contribution patterns, and geolocation data can be exploited to
+de-anonymize participants, particularly in sparsely populated areas.
+Several approaches have been proposed to address this limitation.
+Zebralancer~\cite{lu2018zebralancer} employs zero-knowledge proofs to
+achieve worker anonymity on a public blockchain.
+CHASER~\cite{ying2025chaser} combines asymmetric encryption with
+zk-SNARKs to ensure both data confidentiality and participant anonymity.
+Other works leverage differential privacy~\cite{kim2022privacy, montori2023privacy}
+or linkable ring signatures~\cite{zou2019crowdblps} to protect location and identity information.
+contract-based protocol combining privacy-preserving data aggregation with
+quality-driven incentive mechanisms, implemented as a full-stack decentralized
+application on Ethereum.
+A common limitation of these approaches is that they focus primarily on anonymizing participant identity or the submitted data,
+without addressing the secure distribution of encryption keys among campaign actors.
+
+Bedogni and Ferretti~\cite{bedogni2024crowdsensing} proposed a system
+that directly addresses the relationship between anonymization and
+participation density.
+Their protocol uses a smart contract to coordinate crowd-sensing campaigns, conditioning data acceptance on the presence of a
+sufficient number of participants within the same geographic area to form an adequate anonymization set.
+The smart contract manages encryption key distribution, data chunking into uniform sizes to prevent volume-based
+inference, and reward allocation through a market-driven mechanism.
+Their simulation results demonstrate that population density plays a critical role
+in campaign viability, with sparser areas requiring relaxed freshness
+constraints to reach the participation threshold.
+However, their work remains at the simulation level and does not provide a concrete smart contract
+implementation, nor does it detail the cryptographic key exchange protocol between campaign actors.
+
+The use of smart contracts as a medium for cryptographic key exchange has
+received comparatively less attention.
+Muth and Tschorsch~\cite{muth2020smartdhx} proposed SmartDHX, a Diffie-Hellman key
+exchange scheme fully implemented as an Ethereum smart contract, providing
+asynchronous key agreement with message integrity and authenticity.
+Their approach executes the key exchange entirely on-chain, gaining verifiability
+at the cost of non-trivial gas consumption for cryptographic operations.
+Ruggeri et al.~\cite{ruggeri2020bcbx3dh} extended the X3DH protocol
+onto a blockchain to eliminate the single point of failure of centralized key servers.
+Other works~\cite{owoh2019ecdh} have applied Elliptic Curve
+Diffie-Hellman in IoT blockchain contexts for sensor data exchange.
+However, these schemes target pairwise or group key agreement and do not address the
+specific workflow of a crowdsensing campaign, where an initiator must securely
+distribute distinct encryption and decryption keys to contributors and
+verifiers, respectively.
+
+The protocol presented in this paper builds upon the architectural vision
+of~\cite{bedogni2024crowdsensing} and
+\cite{gigli2024decentralization}, extending it with a complete Solidity
+implementation and a detailed cryptographic key exchange protocol.
+Unlike SmartDHX and similar on-chain key agreement schemes, the proposed approach
+performs the asymmetric encryption (RSA-OAEP) off-chain and uses the smart
+contract solely as a secure transport channel for ciphered key material,
+avoiding the gas overhead of on-chain cryptographic computation.
+The smart contract integrates spatial privacy constraints through geographic chunking
+with configurable minimum participation thresholds, multi-verifier consensus
+with slot-based assignment, bond-based anti-fraud mechanisms, and an ERC-20
+token incentive structure.
+Finally, a comprehensive gas consumption analysis and simulation framework provide
+empirical evidence of the protocol's economic viability an aspect often overlooked in prior privacy-focused MCS proposals.
