@@ -12,6 +12,7 @@
 \usepackage{graphicx}
 \usepackage{blindtext}
 \usepackage{chngcntr}
+\usepackage{amsmath}
 \counterwithin{table}{chapter}
 \usepackage{newlfont}
 \usepackage{fancyhdr}
@@ -33,23 +34,25 @@
 \setcitestyle{numbers,open={[},close={]}}
 
 \newcommand{\rom}[1]{\uppercase\expandafter{\romannumeral #1\relax}}
+\newif\ifofficial
+\ifdefined\officialbuild \officialtrue \fi
 
 \usepackage{pdfpages}
+
+\hypersetup{
+    pdftitle={Smart Contract Implementation and Gas Analysis for Privacy-Enhanced Decentralized Crowdsensing},
+    pdfauthor={Daniele Romanella},
+}
 
 \begin{document}
 % Per spostare i vari elementi più su o più giù gioca con i valori di vspace che ci sono tra uno e l'altro
     \pagestyle{empty}
-    \newgeometry{
-        left=20mm,
-        right=20mm,
-        top=20mm,
-        bottom=20mm
-    }
-
     \input{inc/00-frontespizio}
     \newpage~\newpage
-    \input{inc/01-dedica}
-    \newpage~\newpage
+    \ifofficial\else
+        \input{inc/01-dedica}
+        \newpage~\newpage
+    \fi
     \input{inc/02-abstract}
     \newpage~\newpage
     \input{inc/03-indici}
@@ -71,10 +74,12 @@
     \input{inc/18-conclusions}
     %thesis ends here
 
-
     \bibliography{refs}
+    \renewcommand{\bibsection}{}
     \newpage~\newpage
     \input{inc/19-appendici}
     \newpage~\newpage
-    \input{inc/99-ringraziamenti}
+    \ifofficial\else
+        \input{inc/99-ringraziamenti}
+    \fi
 \end{document}

@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="official bibliography" type="BIBTEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
+    <texify-bibtex>
+      <compiler>BIBTEX</compiler>
+      <compiler-path />
+      <compiler-arguments />
+      <envs>
+        <env name="BIBINPUTS" value="$PROJECT_DIR$/src" />
+        <env name="BSTINPUTS" value="$PROJECT_DIR$/src:" />
+      </envs>
+      <main-file>$PROJECT_DIR$/src/main-official.tex</main-file>
+      <aux-dir>$PROJECT_DIR$/out-official</aux-dir>
+      <latex-distribution>TEXLIVE</latex-distribution>
+    </texify-bibtex>
+    <method v="2" />
+  </configuration>
+</component>

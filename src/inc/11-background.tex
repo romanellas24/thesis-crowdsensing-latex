@@ -1,12 +1,218 @@
 \chapter{Background} \label{ch:background}
-\section{Server architectures} \label{sec:server-architectures}
+This chapter introduces all the background concepts required to understand the protocol and the context in which it works.
+\section{Network architectures} \label{sec:network-architectures}
+Network architecture defines how nodes communicate and interact over a network.
+The most common architectural models are introduced in the following subsections.
 \subsection{Distributed systems} \label{subsec:distributed-systems}
+A distributed system is a collection of independent nodes that communicate and coordinate over a network to appear as a single coherent system~\cite{van2002distributed}.
+This model enables horizontal scaling and eliminates single points of failure, making it suitable for high availability applications.
 \subsection{Client-Server} \label{subsec:client-server}
+The client-server architecture is one of the most widely adopted
+architectural models~\cite{van2002distributed}.
+It involves two types of nodes:
+\begin{itemize}
+    \item \textbf{Server}: the node responsible for delivering content
+    and services to clients, maintained by the service provider.
+    \item \textbf{Client}: the node that communicates with the server
+    to request a specific service or resource.
+\end{itemize}
+These two node types communicate with each other following a
+request-response model, where the client initiates the interaction
+and the server responds accordingly.
+\newline
+Some protocols based on Client-Server architectures are:
+\begin{itemize}
+    \item \textbf{HTTP}: Client sends an HTTP request and receives an HTTP Response~\cite{rfc9110}
+    \item \textbf{DNS}: Client (Resolver) sends a DNS query to DNS server to resolve a name~\cite{rfc1034}
+    \item \textbf{DHCP}: Client broadcasts a DHCP request over all the local network and if a DHCP server is listening it will handle the IP assignation~\cite{rfc2131}
+\end{itemize}
+
 \subsection{Peer-to-peer} \label{subsec:peer-to-peer}
+Peer-to-peer architectures are adopted in contexts where a single server is not able to guarantee a service, where the decentralization is a required property for the model or where the goal is to remove a single point of failure.~\cite{van2002distributed}
+
+In a peer-to-peer context all nodes act as both client and server, simultaneously.
+Each node is called \texttt{peer}, and it is able to request and provide resources to other peers.
+
+In peer-to-peer protocols there is a challenge: peer discovery,
+the mechanism by which a node locates other peers to communicate with.
+A common approach is centralized trackers, where a server maintains a list
+of active peers, but this reintroduces a single point of failure.
+Distributed hash tables (DHT) solve this by distributing peer information
+across the network itself, removing any central dependency~\cite{maymounkov2002kademlia}.
+
+An example of a peer-to-peer protocol is BitTorrent~\cite{cohen2003incentives}, widely used for distributed file sharing.
+The peer-to-peer model also serves as the foundation for distributed storage systems such as IPFS, discussed
+in the following subsection.
 \subsection{IPFS} \label{subsec:ipfs}
+IPFS (InterPlanetary File System) is a peer-to-peer distributed file system that enables efficient and reliable data distribution among all nodes~\cite{benet2014ipfs}.
+Unlike traditional location based addressing, each piece of content is identified by its cryptographic hash, known as a Content Identifier (CID).
+The protocol works in the following way: every node hosts and shares a portion of the data, when a client requests a specific CID, it uses the DHT to retrieve the data from the nodes that store it.
+In addition, IPFS is a versioned file system and it supports integration with decentralized applications, offering a storage layer for blockchains and Web3 ecosystems.
 \section{Blockchain}\label{sec:blockchain}
+A blockchain is a growing distributed ledger that stores data in an ordered sequence of blocks~\cite{bitcoin}.
+Each block contains a set of transactions, the hash of the previous block, and a timestamp; this structure creates a chain.
+This chained structure makes the blockchain transactions resistant to alteration, because, when the transactions are registered,
+an adversary $\mathcal{A}$ would need to produce a block with the same hash, which is infeasible in probabilistic polynomial time~\cite{bitcoin}.
+
 \subsection{Ethereum}\label{subsec:eth}
-\subsection{Smart Contract}\label{subsec:sc}
-\subsection{Gas}\label{subsec:gas}
+Ethereum is an open source, decentralized blockchain platform created by Vitalik Buterin~\cite{ethereum} in 2013.
+Bitcoin was primarily designed as a decentralized digital currency and distributed financial ledger,
+but Ethereum expanded the capabilities of blockchain technologies by introducing a programmable environment~\cite{ethereum}.
+
+\subsubsection{Smart Contracts}
+The core Ethereum architecture introduced the concept of \emph{Smart Contracts}.
+These are deterministic and self-executing programs stored directly on the blockchain, where the terms of an agreement or the logic of an application are encoded into lines of code.
+When predetermined conditions are met, smart contracts execute automatically and autonomously, eliminating the need for trusted third-party intermediaries.
+Smart contracts are written in a Turing-complete programming language~\cite{ethereum}.
+The execution of these contracts is handled by the \emph{Ethereum Virtual Machine} (EVM).
+
+The EVM is an isolated runtime environment that computes and maintains the global state of the Ethereum network.
+Every node participating in the network runs an instance of the EVM, ensuring that all state transitions are processed redundantly and validated by the network consensus algorithm.
+This distributed computation guarantees the integrity, immutability, and security of the system.
+
+\subsubsection{Gas}
+To allocate computational resources and mitigate malicious behaviors such as spam or infinite loops, Ethereum employs a pricing mechanism known as \emph{Gas}.
+Every operation executed within the EVM requires a specific amount of computational effort, which must be compensated.
+Users initiate transactions and pay these gas fees using Wei.
+\[
+    1 \text{ETH} = 10^{18} \text{wei}
+\]
+Ether (ETH) is the network's native cryptocurrency, thereby incentivizing network validators to process and include their transactions in the next block.
+
+\subsubsection{Account types}
+The Ethereum state is managed through a system of accounts.
+There are two primary types of accounts: \emph{Externally Owned Accounts} (EOAs), which are controlled by cryptographic private keys and typically managed by human users, and \emph{Contract Accounts}, which are governed entirely by their underlying smart contract code.
+Historically, Ethereum relied on a Proof-of-Work (PoW) consensus mechanism to secure the network.
+
+\subsubsection{Proof-of-Stake and The Merge}
+Historically, Ethereum relied on a Proof-of-Work (PoW) consensus mechanism, where miners expended vast amounts of computational power to secure the network.
+However, on September 15, 2022, the network executed a major architectural upgrade known as \texttt{The Merge}.
+This event merged the original execution layer (Ethereum Mainnet) with a newly developed consensus layer (the Beacon Chain), effectively transitioning the entire network to a Proof-of-Stake (PoS) protocol~\cite{kelly2023event}.
+Conceptually, PoS replaces energy-intensive mining with financial staking.
+To participate as a validator, a user must lock up (or \texttt{stake}) 32 Ether (ETH) into a designated smart contract.
+Instead of competing to solve arbitrary cryptographic puzzles, validators are pseudo-randomly selected by the protocol to propose new blocks or attest to the validity of blocks proposed by others.
+Honest participation is incentivized through block rewards and transaction fees.
+Conversely, malicious behavior or failure to fulfill validation duties is penalized through a mechanism called \texttt{slashing} which confiscates a portion of the validator's staked funds.
+The shift to PoS drastically reduced the network's energy consumption by approximately 99.98\% \cite{kelly2023event}.
+For a decentralized crowdsensing system, this paradigm shift is of paramount importance.
+Under the previous PoW model, participating in the network required specialized, expensive hardware (such as ASICs or high-end GPUs) and incurred prohibitive electricity costs.
+In contrast, PoS significantly lowers the technical and financial barrier to running a node.
+In PoS, an adversary would need to control over 50\% of the total staked ETH to compromise the network, which is economically prohibitive~\cite{ethereum51}.
+
 \section{Crowdsensing}\label{sec:crowdsensing}
+Crowdsensing, or Mobile Crowdsensing (MSC), is a technique that uses the collective sensing capabilities of individuals, who collect and share data about their surrounding environment, usually leveraging user's devices sensors~\cite{ganti2011mobile}.
+The crowdsensing campaign can be participatory, in this case the users actively collect and upload data or opportunistic: in this case the data are collected and sent in background without any effort form the user.
+There are several actors:
+\begin{itemize}
+    \item Participants: People or devices which share data
+    \item Requester: An entity that requires specific data and sets up the campaign
+    \item Platform: A system that collects and processes data
+\end{itemize}
+Crowdsensing has been applied across several domains.
+In environmental monitoring, it enables large-scale data
+collection about air quality and pollution~\cite{kang2017crowdsensing}.
+In traffic and transportation, it supports real-time infrastructure monitoring using sensors embedded in vehicles~\cite{mei2020crowdsensing}.
+In healthcare, it has been used to model patient flows and support medical monitoring~\cite{lane2010survey}.
+These applications share a common requirement: reliable, privacy-preserving data collection at scale~\cite{ganti2011mobile}.
+
+\subsection{Challenges}
+This approach presents several challenges:
+\begin{itemize}
+    \item Data quality and data sparsity: data often suffers from noise, outliers and gaps because of uneven geographic distribution of participants in a certain area~\cite{ganti2011mobile, lane2010survey}.
+    \item Privacy and Security: collecting data strictly related to real-world location threatens participants' privacy~\cite{ganti2011mobile}.
+    \item Resource constraints: high-frequency sensing and measurements can drain devices' battery and consume a significant network bandwidth~\cite{lane2010survey}.
+    \item System heterogeneity: since the crowdsensing campaign is made using the personal devices of the users, the system required to handle data from different devices~\cite{lane2010survey}.
+\end{itemize}
+
+Among these, data privacy and data quality are the primary challenges that the proposed protocol aims to address~\cite{ganti2011mobile, lane2010survey}.
+
 \section{Related work and state of the art} \label{sec:related-work}
+Mobile crowdsensing leverages the sensing capabilities of everyday
+mobile devices to collect data at scale, avoiding the cost of deploying
+dedicated sensor infrastructure~\cite{capponi2019survey}.
+
+Early MCS platforms adopted centralized architectures, where a trusted server mediates
+task assignment, data collection, and reward distribution.
+While effective, this design introduces a single point of failure, requires participants to
+trust the platform operator with their data, and creates privacy
+vulnerabilities through exposed communication channels~\cite{chen2021survey}.
+
+The integration of blockchain technology into MCS has been explored
+extensively as a means to decentralize platform control and remove the need
+for a trusted intermediary.
+Several surveys~\cite{chen2021survey, yu2023blockchain} provide
+comprehensive overviews of this convergence.
+Smart contracts enable automated task management, verifiable reward distribution, and transparent data
+provenance without relying on a central authority.
+Systems such as CrowdBLPS~\cite{zou2019crowdblps} employ blockchain-based
+location-privacy preservation for crowdsensing, while ABCrowd~\cite{kadadha2020abcrowd} introduces reverse auctions
+as an incentive mechanism in a decentralized ecosystem.
+
+BlockSense~\cite{huang2022blocksense} proposes a dedicated blockchain
+for crowdsensing built on a Proof-of-Data consensus algorithm, using
+zk-SNARKs and homomorphic encryption to verify data quality.
+Chatzopoulos et al.~\cite{chatzopoulos2018privacy} designed a spatial
+crowdsensing system where smart contracts manage both privacy and
+cost-optimal task allocation.
+More recently, Gigli et al.~\cite{gigli2024decentralization} presented an architectural
+vision for decentralizing MCS on distributed ledgers.
+
+Despite the inherent pseudonymity of blockchain addresses, privacy remains a
+significant challenge in blockchain-based MCS. Transaction metadata,
+contribution patterns, and geolocation data can be exploited to
+de-anonymize participants, particularly in sparsely populated areas.
+Several approaches have been proposed to address this limitation.
+Zebralancer~\cite{lu2018zebralancer} employs zero-knowledge proofs to
+achieve worker anonymity on a public blockchain.
+CHASER~\cite{ying2025chaser} combines asymmetric encryption with
+zk-SNARKs to ensure both data confidentiality and participant anonymity.
+Other works leverage differential privacy~\cite{kim2022privacy, montori2023privacy}
+or linkable ring signatures~\cite{zou2019crowdblps} to protect location and identity information.
+contract-based protocol combining privacy-preserving data aggregation with
+quality-driven incentive mechanisms, implemented as a full-stack decentralized
+application on Ethereum.
+A common limitation of these approaches is that they focus primarily on anonymizing participant identity or the submitted data,
+without addressing the secure distribution of encryption keys among campaign actors.
+
+Bedogni and Ferretti~\cite{bedogni2024crowdsensing} proposed a system
+that directly addresses the relationship between anonymization and
+participation density.
+Their protocol uses a smart contract to coordinate crowd-sensing campaigns, conditioning data acceptance on the presence of a
+sufficient number of participants within the same geographic area to form an adequate anonymization set.
+The smart contract manages encryption key distribution, data chunking into uniform sizes to prevent volume-based
+inference, and reward allocation through a market-driven mechanism.
+Their simulation results demonstrate that population density plays a critical role
+in campaign viability, with sparser areas requiring relaxed freshness
+constraints to reach the participation threshold.
+However, their work remains at the simulation level and does not provide a concrete smart contract
+implementation, nor does it detail the cryptographic key exchange protocol between campaign actors.
+
+The use of smart contracts as a medium for cryptographic key exchange has
+received comparatively less attention.
+Muth and Tschorsch~\cite{muth2020smartdhx} proposed SmartDHX, a Diffie-Hellman key
+exchange scheme fully implemented as an Ethereum smart contract, providing
+asynchronous key agreement with message integrity and authenticity.
+Their approach executes the key exchange entirely on-chain, gaining verifiability
+at the cost of non-trivial gas consumption for cryptographic operations.
+Ruggeri et al.~\cite{ruggeri2020bcbx3dh} extended the X3DH protocol
+onto a blockchain to eliminate the single point of failure of centralized key servers.
+Other works~\cite{owoh2019ecdh} have applied Elliptic Curve
+Diffie-Hellman in IoT blockchain contexts for sensor data exchange.
+However, these schemes target pairwise or group key agreement and do not address the
+specific workflow of a crowdsensing campaign, where an initiator must securely
+distribute distinct encryption and decryption keys to contributors and
+verifiers, respectively.
+
+The protocol presented in this paper builds upon the architectural vision
+of~\cite{bedogni2024crowdsensing} and\cite{gigli2024decentralization}, extending it with a complete Solidity
+implementation and a detailed cryptographic key exchange protocol.
+Unlike SmartDHX and similar on-chain key agreement schemes, the proposed approach
+performs the asymmetric encryption (RSA-OAEP) off-chain and uses the smart
+contract solely as a secure transport channel for ciphered key material,
+avoiding the gas overhead of on-chain cryptographic computation.
+The smart contract integrates spatial privacy constraints through geographic chunking
+with configurable minimum participation thresholds, multi-verifier consensus
+with slot-based assignment, bond-based anti-fraud mechanisms, and an ERC-20
+token incentive structure.
+Finally, a comprehensive gas consumption analysis and simulation framework provide
+empirical evidence of the protocol's economic viability an aspect often overlooked in prior privacy-focused MCS proposals.

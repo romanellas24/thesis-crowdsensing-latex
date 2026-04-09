@@ -28,7 +28,6 @@
 *.blg
 *-blx.aux
 *-blx.bib
-*.run.xml
 
 ## Build tool auxiliary files:
 *.fdb_latexmk
@@ -313,3 +312,4 @@ TSWLatexianTemp*
 #IDE
 .idea
 out/
+out-official/

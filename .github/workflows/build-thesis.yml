@@ -18,18 +18,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Compile thesis
+      - name: Compile thesis (full)
         uses: xu-cheng/latex-action@v4
         with:
           root_file: src/main.tex
           work_in_root_file_dir: true
           texlive_version: 2024
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Rename full version
+        run: mv src/main.pdf src/thesis-full.pdf
+
+      - name: Compile thesis (official)
+        uses: xu-cheng/latex-action@v4
         with:
-          name: thesis
-          path: src/main.pdf
+          root_file: src/main-official.tex
+          work_in_root_file_dir: true
+          texlive_version: 2024
+
+      - name: Rename official version
+        run: mv src/main-official.pdf src/thesis-official.pdf
 
       - name: Release thesis
         uses: softprops/action-gh-release@v2
@@ -37,4 +44,6 @@ jobs:
         with:
           tag_name: latest
           name: Latest build
-          files: src/main.pdf
+          files: |
+            src/thesis-full.pdf
+            src/thesis-official.pdf
