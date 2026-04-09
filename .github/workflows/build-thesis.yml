@@ -38,6 +38,18 @@ jobs:
       - name: Rename official version
         run: mv src/main-official.pdf src/thesis-official.pdf
 
+      - name: Upload artifact (full)
+        uses: actions/upload-artifact@v4
+        with:
+          name: thesis-full
+          path: src/thesis-full.pdf
+
+      - name: Upload artifact (official)
+        uses: actions/upload-artifact@v4
+        with:
+          name: thesis-official
+          path: src/thesis-official.pdf
+
       - name: Release thesis
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main'
