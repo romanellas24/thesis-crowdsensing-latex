@@ -36,7 +36,7 @@ jobs:
           texlive_version: 2024
 
       - name: Rename official version
-        run: mv src/main.pdf src/thesis-official.pdf
+        run: mv src/main-official.pdf src/thesis-official.pdf
 
       - name: Release thesis
         uses: softprops/action-gh-release@v2
