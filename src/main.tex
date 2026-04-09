@@ -20,12 +20,6 @@
 \usepackage[utf8]{inputenc}
 \usepackage{float}
 \usepackage{hyperref}
-
-\hypersetup{
-    pdftitle={Smart Contract Implementation and Gas Analysis for Privacy-Enhanced Decentralized Crowdsensing},
-    pdfauthor={Daniele Romanella},
-}
-
 \usepackage[capitalize,noabbrev]{cleveref}
 \usepackage{soul}
 \usepackage[font=footnotesize,labelfont=bf]{caption}
@@ -44,6 +38,11 @@
 \ifdefined\officialbuild \officialtrue \fi
 
 \usepackage{pdfpages}
+
+\hypersetup{
+    pdftitle={Smart Contract Implementation and Gas Analysis for Privacy-Enhanced Decentralized Crowdsensing},
+    pdfauthor={Daniele Romanella},
+}
 
 \begin{document}
 % Per spostare i vari elementi più su o più giù gioca con i valori di vspace che ci sono tra uno e l'altro
@@ -76,6 +75,7 @@
     %thesis ends here
 
     \bibliography{refs}
+    \renewcommand{\bibsection}{}
     \newpage~\newpage
     \input{inc/19-appendici}
     \newpage~\newpage
