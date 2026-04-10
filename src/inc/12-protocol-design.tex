@@ -8,18 +8,30 @@ This approach shares similarities with prior work on asymmetric key exchange med
 
 \section{Actors}\label{sec:actors}
 The protocol involves several actors that are described in the following subsections.
+
 \subsection{Campaign initiator}\label{subsec:campaign-initiator}
 The campaign initiator (\texttt{B}) is the actor interested for collecting data for some reason.
 They define the geographic area where the smart contract works and set the smart contract hyperparameters, all configurable parameters are explained in Appendix~\ref{ch:appendix-a-parameters}.
-In addition they deposit the reward funds into the smart contract to ensure that funds are available and senders and verifiers can be compensated.
+In addition, they deposit the reward funds into the smart contract to ensure that funds are available and senders and verifiers can be compensated.
 The details of rewarding model are described in the~\ref{subsec:proto-rewarding-model} subsection.
 
 \subsection{Sender}\label{subsec:sender}
+Senders (hereafter referred to as \"\texttt{S}\") are the users who contribute to the crowdsensing campaign by submitting data retrieved from the environment where they are located.
+To contribute, senders, after the joining phase, upload data to IPFS and submit the encrypted CID through the smart contract.
+
 \subsection{Verifier}\label{subsec:verifiers}
+Verifiers (hereafter referred to as \"\texttt{V}\") are the users who contribute to the crowdsensing campaign by executing data quality checks and submitting the verification result through smart contract functions.
+To contribute, verifiers listen for events emitted by the smart contract.
+Upon receiving a \texttt{DataVerificationRequestedEvent}, they request verification authorization; if granted, they execute the verification and publish the result.
+
+\subsection{Smart Contract}\label{subsec:smartcontract}
+
+
 
 \section{Protocol workflow}\label{sec:proto-workflow}
 \subsection{Initialization}\label{subsec:proto-init}
-\subsection{Enrollment}\label{subsec:proto-enrollment}
+\subsection{Sender enrollment}\label{subsec:proto-sender-enrollment}
+\subsection{Verifier enrollment}\label{subsec:proto-verifier-enrollment}
 \subsection{Data submission}\label{subsec:proto-datasubmit}
 \subsection{Verification}\label{subsec:proto-verification}
 \subsection{Data publishing}\label{subsec:proto-data-publish}
