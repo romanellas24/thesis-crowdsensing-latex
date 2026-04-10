@@ -1,0 +1,202 @@
+\chapter{Smart Contract Configuration Parameters}\label{ch:appendix-a-parameters}
+This appendix provides a comprehensive reference for all configurable parameters accepted by the smart contract at deployment time.
+The constructor receives a
+    \texttt{Config} struct, which is composed of four sub-structures:
+        \texttt{SmartContractNeeds},
+        \texttt{ChunkConfig},
+        \texttt{RewardConfig} and \texttt{GlobalPosition}.
+Each sub-structure is documented in a dedicated table below.
+In addition, the constructor receives the \texttt{B} public key and the address of \texttt{DataSentTokenContract} which is the token introduced for senders and verifiers rewarding.
+The details of rewarding model are described in the~\ref{subsec:proto-rewarding-model} subsection.
+
+A convention adopted throughout the configuration is the \textbf{zero-means-unlimited} semantics: when a parameter that governs a limit is set to zero, the corresponding constraint is not enforced.
+This convention is explicitly noted for each applicable parameter.
+
+% SmartContractNeeds
+\section{Campaign Requirements (\texttt{SmartContractNeeds})}\label{sec:appendix-a-needs}
+The \texttt{SmartContractNeeds} structure defines the operational rules of the crowdsensing campaign, including participation limits, and data acceptance criteria.
+\ref{tab:params-needs} lists each parameter with its type, constraints, and description.
+\begin{table}
+    \centering
+    \caption{Parameters of the \texttt{SmartContractNeeds} structure.}
+    \label{tab:params-needs}
+    \small
+    \begin{tabular}{p{3.8cm} l p{1.8cm} p{5.8cm}}
+        \hline
+        \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
+        \hline
+        %\texttt{freshnessPeriod}
+        %& \texttt{uint256}
+        %& $\geq 0$ (0 = disabled)
+        %& Reserved for future use. Intended to define a time window for data freshness validation. Currently not enforced by the contract logic. \\[6pt]
+        \texttt{dataNeeded}
+        & \texttt{uint256}
+        & $\geq 0$ (0 = unlimited)
+        & Number of positively verified data entries required to automatically close the campaign.
+        When set to zero, the campaign does not auto-close based on data count alone. \\[6pt]
+
+        \texttt{maximumDataPerChunk}
+        & \texttt{uint256}
+        & $\geq 0$ (0 = unlimited)
+        & Maximum number of data submissions accepted within a single spatial chunk.
+        Prevents over-representation of a geographic area. \\[6pt]
+
+        \texttt{checksRequired}
+        & \texttt{uint8}
+        & odd, $\geq 1$
+        & Number of independent verification slots allocated per data entry.
+        The odd constraint ensures that a strict majority can always be determined. \\[6pt]
+
+        \texttt{verifierCooldown}
+        & \texttt{uint256}
+        & $> 0$
+        & Minimum distance (in data entry indices) between consecutive assignments of the same verifier.
+        Prevents a single verifier from being assigned to sequentially adjacent data entries, promoting verification independence. \\[6pt]
+
+        \texttt{verificationTimeout}
+        & \texttt{uint256}
+        & $> 0$
+        & Time window (in seconds) granted to a verifier to complete the assigned verification task.
+        If the deadline expires, the verification slot becomes available for reassignment. \\[6pt]
+
+        \texttt{minimumParticipants}
+        & \texttt{uint256}
+        & $\geq 0$ (0 = unset)
+        & Minimum number of unique senders that must have at least one positively verified data entry for the campaign to auto-close.
+        Combined with \texttt{dataNeeded} in a dual-threshold check. \\[6pt]
+
+        \texttt{maxDataPerSender}
+        & \texttt{uint256}
+        & $\geq 0$ (0 = unlimited)
+        & Maximum number of data entries a single sender is allowed to submit.
+        When greater than zero, the bond mechanism is activated: senders must deposit a bond proportional to this limit before submitting data. \\[6pt]
+
+        \texttt{maxDataPerVerifier\-PerBond}
+        & \texttt{uint256}
+        & $\geq 0$
+        & Number of verification tasks covered by a single bond deposit.
+        Used to compute the required verifier bond as $\texttt{maxDataPerVerifierPerBond} \times \texttt{dataVerifierBondPerData}$. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+
+% ChunkConfig
+\section{Spatial Chunking (\texttt{ChunkConfig})}\label{sec:appendix-a-chunks}
+
+The \texttt{ChunkConfig} structure controls the spatial partitioning of the campaign area into a square grid of chunks.
+\cref{tab:params-chunks} lists the two parameters involved.
+
+\begin{table}
+    \centering
+    \caption{Parameters of the \texttt{ChunkConfig} structure.}
+    \label{tab:params-chunks}
+    \small
+    \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
+        \hline
+        \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
+        \hline
+        \texttt{chunkSize}
+        & \texttt{uint256}
+        & $> 0$
+        & Side length of each square chunk, expressed in E7 coordinate units (i.e., $10^{-7}$ degrees).
+        For reference, 1\,000 E7 units correspond to approximately 11 meters at the equator. \\[6pt]
+
+        \texttt{chunk4Side}
+        & \texttt{uint16}
+        & $> 0$
+        & Number of chunks along each side of the square campaign area.
+        The total number of chunks is $\texttt{chunk4Side}^2$.
+
+        When set to 1, the spatial chunking system is effectively disabled and the entire campaign area is treated as a single region. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+The total geographic extent of the campaign area is derived as $\texttt{chunkSize} \times \texttt{chunk4Side}$ E7 units per side, starting from the origin coordinates specified in the \texttt{GlobalPosition} parameter (see \Cref{sec:appendix-a-origin-coordinated}.
+% RewardConfig
+\section{Reward and Bond Configuration (\texttt{RewardConfig})}\label{sec:appendix-a-rewards}
+
+The \texttt{RewardConfig} structure governs the economic model of the campaign, defining the total token supply, per-operation payouts, and bond amounts denominated in DST (DataSent Token).
+\ref{tab:params-rewards} lists all parameters.
+\begin{table}
+    \centering
+    \caption{Parameters of the \texttt{RewardConfig} structure.}
+    \label{tab:params-rewards}
+    \small
+    \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
+        \hline
+        \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
+        \hline
+        \texttt{totalDst}
+        & \texttt{uint256}
+        & $> 0$
+        & Total amount of DST tokens that the campaign initiator must deposit into the contract to fund all sender and verifier rewards. \\[6pt]
+
+        \texttt{dataSenderPayout}
+        & \texttt{uint16}
+        & $>$ \texttt{dataSender\-BondPerData}
+        & DST tokens paid to a sender when one of their data entries is positively verified.
+        The constraint ensures that participation is always economically incentivized. \\[6pt]
+
+        \texttt{dataVerifierPayout}
+        & \texttt{uint16}
+        & $>$ \texttt{dataVerifier\-BondPerData}
+        & DST tokens paid to a verifier who voted with the majority on a resolved data entry. \\[6pt]
+
+        \texttt{dataSenderBond\-PerData}
+        & \texttt{uint16}
+        & $> 0$
+        & DST tokens deducted from the sender's bond balance at data submission time.
+        Returned together with the payout upon positive verification. \\[6pt]
+
+        \texttt{dataVerifierBond\-PerData}
+        & \texttt{uint16}
+        & $> 0$
+        & DST tokens deducted from the verifier's bond balance when a verification task is assigned.
+        Returned together with the payout upon a majority-aligned vote. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+The bond mechanism serves a dual purpose: it discourages low-quality submissions and frivolous verifications, while ensuring that participants have a stake in the correctness of their contributions.
+Bonds are deducted at action time (submission or assignment) rather than at reward time, so that the balance check is enforced before the operation is recorded on-chain.
+
+
+% GlobalPosition
+\section{Campaign Origin Coordinates (\texttt{GlobalPosition})}\label{sec:appendix-a-origin-coordinated}
+
+The \texttt{GlobalPosition} structure defines the geographic origin (south-west corner) of the campaign area.
+The coordinate representation and the E7 packing mechanism are described in detail in the implementation chapter. \Cref{tab:params-position} lists the fields and their valid ranges.
+
+\begin{table}[H]
+    \centering
+    \caption{Fields of the \texttt{GlobalPosition} structure.}
+    \label{tab:params-position}
+    \small
+    \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
+        \hline
+        \textbf{Field} & \textbf{Type} & \textbf{Valid Range} & \textbf{Description} \\
+        \hline
+        \texttt{latitudeInteger}
+        & \texttt{int32}
+        & $[-90,\; +90]$
+        & Integer part of the latitude in degrees. \\[6pt]
+
+        \texttt{latitudeDecimal}
+        & \texttt{uint32}
+        & $[0,\; 9\,999\,999]$
+        & Fractional part of the latitude, representing up to seven decimal digits. \\[6pt]
+
+        \texttt{longitudeInteger}
+        & \texttt{int32}
+        & $[-180,\; +180]$
+        & Integer part of the longitude in degrees. \\[6pt]
+
+        \texttt{longitudeDecimal}
+        & \texttt{uint32}
+        & $[0,\; 9\,999\,999]$
+        & Fractional part of the longitude, representing up to seven decimal digits. \\
+        \hline
+    \end{tabular}
+\end{table}
