@@ -16,16 +16,19 @@ In addition, they deposit the reward funds into the smart contract to ensure tha
 The details of rewarding model are described in the~\ref{subsec:proto-rewarding-model} subsection.
 
 \subsection{Sender}\label{subsec:sender}
-Senders (hereafter referred to as \"\texttt{S}\") are the users who contribute to the crowdsensing campaign by submitting data retrieved from the environment where they are located.
+Senders (hereafter referred to as \("\)\texttt{S}\("\)) are the users who contribute to the crowdsensing campaign by submitting data retrieved from the environment where they are located.
 To contribute, senders, after the joining phase, upload data to IPFS and submit the encrypted CID through the smart contract.
 
 \subsection{Verifier}\label{subsec:verifiers}
-Verifiers (hereafter referred to as \"\texttt{V}\") are the users who contribute to the crowdsensing campaign by executing data quality checks and submitting the verification result through smart contract functions.
+Verifiers (hereafter referred to as \("\)\texttt{V}\("\)) are the users who contribute to the crowdsensing campaign by executing data quality checks and submitting the verification result through smart contract functions.
 To contribute, verifiers listen for events emitted by the smart contract.
 Upon receiving a \texttt{DataVerificationRequestedEvent}, they request verification authorization; if granted, they execute the verification and publish the result.
 
 \subsection{Smart Contract}\label{subsec:smartcontract}
-
+Smart Contract (hereafter referred to as \("\)\texttt{SC}\("\)) is the actor that mediates the interaction between all other actors.
+In addition, this actor handle the payment model and the bond mechanism, described in Sections ~\ref{subsec:proto-rewarding-model} and ~\ref{subsec:proto-bond-model}.
+The smart contract acts as the sole communication channel between participants, eliminating direct interaction.
+It stores encrypted cryptographic material and data references on-chain, and enforces campaign lifecycle rules such as participation thresholds and automatic closure.
 
 
 \section{Protocol workflow}\label{sec:proto-workflow}
