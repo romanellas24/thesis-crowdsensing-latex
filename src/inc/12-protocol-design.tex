@@ -34,7 +34,22 @@ It stores encrypted cryptographic material and data references on-chain, and enf
 \section{Protocol workflow}\label{sec:proto-workflow}
 The protocol workflow is described in the following subsections.
 Each phase is illustrated by a corresponding sequence diagram.
+
 \subsection{Initialization}\label{subsec:proto-init}
+Initialization phase consists of the following steps.
+The campaign initiator deploys the smart contract, indicating all the parameters, described in Appendix~\ref{ch:appendix-a-parameters}.
+After the deployment, the owner approves the transfer of a \texttt{totalDst}
+quantity of DST (described in~\ref{subsec:data-sent-token}) to the smart contract address,
+and then confirms the deposit.
+All interaction are shown in figure~\ref{fig:proto-phase-init}
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-initialization-out}
+        \caption{Initialization phase workflow}\label{fig:proto-phase-init}
+    \end{center}\label{fig:proto-phase-init-container}
+\end{figure}
+
 \subsection{Sender enrollment}\label{subsec:proto-sender-enrollment}
 \subsection{Verifier enrollment}\label{subsec:proto-verifier-enrollment}
 \subsection{Data submission}\label{subsec:proto-datasubmit}
@@ -42,6 +57,7 @@ Each phase is illustrated by a corresponding sequence diagram.
 \subsection{Data publishing}\label{subsec:proto-data-publish}
 
 \section{Incentive mechanisms}\label{sec:incentive-mechanisms}
+\subsection{Data Sent Token (DST)}\label{subsec:data-sent-token}
 \subsection{Rewarding model}\label{subsec:proto-rewarding-model}
 \subsection{Bond model}\label{subsec:proto-bond-model}
 \section{Security analysis and issues}\label{sec:security-analysis-issues}
