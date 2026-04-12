@@ -37,7 +37,7 @@ Each phase is illustrated by a corresponding sequence diagram.
 
 \subsection{Initialization}\label{subsec:proto-init}
 Initialization phase consists of the following steps.
-The campaign initiator deploys the smart contract, indicating all the parameters, described in Appendix~\ref{ch:appendix-a-parameters}.
+The campaign initiator (\texttt{B}) deploys the smart contract, indicating all the parameters, described in Appendix~\ref{ch:appendix-a-parameters}.
 After the deployment, the owner approves the transfer of a \texttt{totalDst}
 quantity of DST (described in~\ref{subsec:data-sent-token}) to the smart contract address,
 and then confirms the deposit.
@@ -51,6 +51,22 @@ All interaction are shown in figure~\ref{fig:proto-phase-init}
 \end{figure}
 
 \subsection{Sender enrollment}\label{subsec:proto-sender-enrollment}
+From the Sender \texttt{S} side, any sender who wants to contribute to the crowdsensing campaign has to generate a private/public key pair.
+Subsequently, \texttt{S} retrieves the \texttt{B}'s public key from the smart contract.
+So \texttt{S} computes:
+\[
+    c_1 = \text{Enc}(PK_S, PK_B)
+\]
+And send $c$ to smart contract.
+On ciphertext receiving, \texttt{SC} triggers an event that \texttt{B} is waiting for.
+When \texttt{B} sees that the event is emitted, retrieves data from the event that are the sender address and $c$.
+\newline
+So \texttt{B} computes:
+\[
+    PK_S = \text{Dec}(c_1, SK_B)
+\]
+
+
 \subsection{Verifier enrollment}\label{subsec:proto-verifier-enrollment}
 \subsection{Data submission}\label{subsec:proto-datasubmit}
 \subsection{Verification}\label{subsec:proto-verification}
