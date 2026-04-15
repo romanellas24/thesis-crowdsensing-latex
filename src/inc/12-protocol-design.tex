@@ -2,7 +2,7 @@
 In this chapter the protocol design is presented.
 The protocol leverages smart contracts and asymmetric encryption to ensure confidentiality and data integrity.
 The protocol adopts a multi-layered encryption approach, performed off-chain, and uses the smart contract as a communication channel for the crowdsensing campaign.
-The key exchange is made to and from the campaign initiator (referred from now as \"\texttt{B}\").
+The key exchange is made to and from the campaign initiator (referred from now as ''\texttt{B}'').
 \texttt{B} uses their private/public key pair for enhancing confidentiality, in this way, only \texttt{B} can access the other actors' public key, namely senders (\texttt{S}) and verifiers (\texttt{V}).
 This approach shares similarities with prior work on asymmetric key exchange mediated by smart contracts~\cite{muth2020smartdhx}, although it differs substantially in both application domain and protocol design.
 
@@ -34,6 +34,14 @@ It stores encrypted cryptographic material and data references on-chain, and enf
 \section{Protocol workflow}\label{sec:proto-workflow}
 The protocol workflow is described in the following subsections.
 Each phase is illustrated by a corresponding sequence diagram.
+The protocol design follows and extends the work presented in~\cite{bedogni2024crowdsensing}.
+
+For clarity, the following notation is adopted throughout this chapter:
+\begin{itemize}
+    \item $\text{Enc}(m, PK)$: encryption of message $m$ using public key $PK$;
+    \item $\text{Dec}(c, SK)$: decryption of ciphertext $c$ using private key $SK$;
+    \item $(PK_X, SK_X)$: public and private key pair of actor $X$.
+\end{itemize}
 
 \subsection{Initialization}\label{subsec:proto-init}
 Initialization phase consists of the following steps.
@@ -51,21 +59,38 @@ All interaction are shown in figure~\ref{fig:proto-phase-init}
 \end{figure}
 
 \subsection{Sender enrollment}\label{subsec:proto-sender-enrollment}
-From the Sender \texttt{S} side, any sender who wants to contribute to the crowdsensing campaign has to generate a private/public key pair.
-Subsequently, \texttt{S} retrieves the \texttt{B}'s public key from the smart contract.
+Any sender who wants to contribute to the crowdsensing campaign has to generate a private/public key pair. $(PK_S, SK_S)$
+Subsequently, \texttt{S} retrieves the public key of \texttt{B} from the smart contract.
 So \texttt{S} computes:
 \[
     c_1 = \text{Enc}(PK_S, PK_B)
 \]
-And send $c$ to smart contract.
-On ciphertext receiving, \texttt{SC} triggers an event that \texttt{B} is waiting for.
-When \texttt{B} sees that the event is emitted, retrieves data from the event that are the sender address and $c$.
-\newline
-So \texttt{B} computes:
+and sends $c_1$ to the smart contract.
+Upon receiving the ciphertext, the smart contract emits an event that \texttt{B} monitors.
+When \texttt{B} detects the event, it retrieves the sender address and $c_1$from it.
+
+Then \texttt{B} computes:
 \[
     PK_S = \text{Dec}(c_1, SK_B)
 \]
+At this point, \texttt{B} possesses \texttt{S}'s public key and can establish a secure channel. \texttt{B} computes:
+\[
+    c_2 = \text{Enc}(K_{enc}, PK_S)
+\]
+And sends $c_2$ to the smart contract which triggers an event to notify \texttt{S}.
+Finally, \texttt{S} retrieves $c_2$ from the emitted event and computes
+\[
+    K_{enc} = \text{Dec}(c_2, SK_S)
+\]
+This key will be used for CID encryption, as shown in Section~\ref{subsec:proto-datasubmit}.
+All interaction are shown in figure~\ref{fig:proto-design-workflow-sender-join}
 
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-sender-enrollment-out}
+        \caption{Initialization phase workflow}\label{fig:proto-design-workflow-sender-join}
+    \end{center}\label{fig:proto-design-workflow-sender-join-container}
+\end{figure}
 
 \subsection{Verifier enrollment}\label{subsec:proto-verifier-enrollment}
 \subsection{Data submission}\label{subsec:proto-datasubmit}
