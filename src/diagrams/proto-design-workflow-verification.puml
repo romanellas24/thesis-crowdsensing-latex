@@ -1,0 +1,42 @@
+@startuml verification
+title Verification Phase
+
+actor "Verifier\n(V)" as V
+participant "Smart Contract\n(SC)" as SC
+database "IPFS" as IPFS
+
+== Authorization Request ==
+
+V -> SC : Request verification authorization
+
+alt Authorization granted
+    SC -> SC : Elect V to an available slot
+    SC -> V : Emit VerifierElected(V, dataId, slotIndex, CID_ciphered)
+else Authorization denied
+    SC --> V : Revert (no eligible data entry)
+    note right of V : V waits before retrying
+end
+
+== Verification Execution ==
+
+V -> V : Compute CID = Dec(CID_ciphered, K_dec)
+V -> IPFS : Retrieve encrypted data by CID
+IPFS --> V : Encrypted data
+V -> V : Decrypt and perform quality checks
+
+== Result Submission ==
+
+alt Check completed (VALID or INVALID)
+    V -> SC : Submit verification result
+    SC -> SC : Register response in slot
+    alt Strict majority reached
+        SC -> SC : Flag data entry as VALID / INVALID
+        SC -> V : Emit DataVerified(dataId, result)
+        note right of SC : Payments and penalties\nare applied here
+    end
+else Cannot complete or deadline missed
+    V -> SC : Submit CANNOT_COMPLETE
+    SC -> SC : Release slot for reassignment
+end
+
+@enduml

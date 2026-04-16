@@ -142,14 +142,45 @@ This concludes the data submission phase and triggers the verification phase (de
 All interactions are shown in figure~\ref{fig:proto-design-data-submission}
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-data-submission-out} % TODO: CHANGE
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-data-submission-out}
         \caption{Verifier phase workflow}\label{fig:proto-design-data-submission}
     \end{center}\label{fig:proto-design-data-submission-container}
 \end{figure}
 
 \subsection{Verification}\label{subsec:proto-verification}
-\subsection{Data publishing}\label{subsec:proto-data-publish}
+The verification phase is performed by verifiers, whose goal is to determine whether a given data entry meets the quality requirements of the campaign.
+To mitigate the risk of a single malicious or faulty verifier, each data entry is independently verified through multiple \textit{verification slots}.
+The number of slots is configured to be odd, so that a strict majority decision is always reachable and ties are structurally avoided.
+Slots are not statically assigned: each verifier must explicitly request authorization, and the smart contract elects it to an available slot only if the eligibility and cooldown constraints are satisfied.
 
+A verifier \texttt{V} can request authorization either upon receiving a \texttt{DataVerificationRequestedEvent} or by polling autonomously.
+Please note that the smart contract is not constrained to return the data entry that triggered the event: any pending data entry eligible for verification can be returned.
+
+The authorization request has two possible outcomes:
+\begin{itemize}
+    \item The \texttt{VerifierElected} event is emitted, carrying among its parameters the ciphered CID and the address of the elected verifier;
+    \item The authorization is denied, in which case \texttt{V} must wait before attempting again.
+\end{itemize}
+
+When \texttt{V} is elected, it can proceed with the verification.
+\texttt{V} computes:
+\[
+    CID = \text{Dec}(CID_{ciphered}, K_{dec})
+\]
+\texttt{V} then retrieves the encrypted data from IPFS using the $CID$ and performs quality checks on it.
+After the checks, \texttt{V} submits the verification result to the smart contract.
+
+As soon as a strict majority of slots agrees on a result (either positive or negative), the smart contract flags the data entry as \texttt{VALID} or \texttt{INVALID}, and the verification process concludes.
+Any remaining unfilled slots are no longer needed and are effectively discarded.
+If \texttt{V} cannot complete the task or misses the deadline, it can submit the special result \texttt{CANNOT\_COMPLETE}; in this case, the verification slot is released and becomes available for reassignment.
+Once the data entry is flagged, payments and penalties are applied, as described in Section~\ref{sec:incentive-mechanisms}.
+All interactions are shown in figure~\ref{fig:proto-design-verification}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-verification-out}
+        \caption{Verification process workflow}\label{fig:proto-design-verification}
+    \end{center}\label{fig:proto-design-verification-container}
+\end{figure}
 \section{Incentive mechanisms}\label{sec:incentive-mechanisms}
 \subsection{Data Sent Token (DST)}\label{subsec:data-sent-token}
 \subsection{Rewarding model}\label{subsec:proto-rewarding-model}
