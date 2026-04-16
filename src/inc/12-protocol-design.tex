@@ -139,6 +139,14 @@ IPFS returns a Content Identifier (CID, see Section~\ref{subsec:ipfs})
 Then \texttt{S} sends $CID_{ciphered}$ to the smart contract along with the geographic position of the measurement.
 Once the data is registered, a specific event is emitted by the smart contract which is monitored by verifiers.
 This concludes the data submission phase and triggers the verification phase (described in Section ~\ref{subsec:proto-verification}).
+All interactions are shown in figure~\ref{fig:proto-design-data-submission}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-data-submission-out} % TODO: CHANGE
+        \caption{Verifier phase workflow}\label{fig:proto-design-data-submission}
+    \end{center}\label{fig:proto-design-data-submission-container}
+\end{figure}
+
 \subsection{Verification}\label{subsec:proto-verification}
 \subsection{Data publishing}\label{subsec:proto-data-publish}
 
