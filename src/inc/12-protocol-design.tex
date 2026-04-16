@@ -143,7 +143,7 @@ All interactions are shown in figure~\ref{fig:proto-design-data-submission}
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-data-submission-out}
-        \caption{Verifier phase workflow}\label{fig:proto-design-data-submission}
+        \caption{Data submission workflow}\label{fig:proto-design-data-submission}
     \end{center}\label{fig:proto-design-data-submission-container}
 \end{figure}
 
@@ -181,8 +181,43 @@ All interactions are shown in figure~\ref{fig:proto-design-verification}
         \caption{Verification process workflow}\label{fig:proto-design-verification}
     \end{center}\label{fig:proto-design-verification-container}
 \end{figure}
+
 \section{Incentive mechanisms}\label{sec:incentive-mechanisms}
+The incentive mechanism consists of two different approaches: rewarding actors to encourage honest behaviour and penalizing actors discouraging dishonest behaviours.
+These approaches are enforced through a rewarding system (Section~\ref{subsec:proto-rewarding-model}) and a bond system (Section~\ref{subsec:proto-bond-model}).
+
 \subsection{Data Sent Token (DST)}\label{subsec:data-sent-token}
-\subsection{Rewarding model}\label{subsec:proto-rewarding-model}
-\subsection{Bond model}\label{subsec:proto-bond-model}
+Data Sent Token (DST) is a custom ERC-20~\cite{eip20} token used to incentivize participation in the campaign, following the approach of reward-based crowdsensing incentive schemes such as~\cite{ying2025chaser}.
+
+\subsection{Rewarding system}\label{subsec:proto-rewarding-model}
+The rewarding system is  configurable by \texttt{B}.
+The working process is quite straightforward: when a data entry is flagged as \texttt{VALID} or \texttt{INVALID} the rewarding process is triggered:
+\begin{enumerate}
+    \item If the data is \texttt{VALID}, the smart contract rewards \texttt{S} with the configured payout. If the data is \texttt{INVALID}, \texttt{S} receives no payout.
+    \item Verifiers, on the other hand, are rewarded conditionally: only verifiers who voted according to the final verification result receive the configured payout. Verifiers who submitted a contradicting vote receive no reward.
+\end{enumerate}
+
+\subsection{Bond system}\label{subsec:proto-bond-model}
+A bond is a refundable collateral, denominated in DST tokens, that senders and verifiers must deposit before contributing to the campaign.
+It serves as a commitment device: honest behaviour results in the bond being returned, while invalid contributions or incorrect verifications lead to its forfeit.
+
+The bond system, like the rewarding one, is fully configurable by \texttt{B}, and operates alongside the rewarding system (Section~\ref{subsec:proto-rewarding-model}).
+Bond tokens are refunded together with the associated reward, in order to minimize the number of transactions and the overall gas cost.
+Conversely, when a data entry is flagged as \texttt{INVALID}, the sender's bond is forfeited; similarly, verifiers whose vote contradicts the final verification result forfeit their bond.
+
+The bond mechanism differs between senders and verifiers.
+Verifiers deposit a bond equal to \texttt{maxDataPerVerifierPerBond} $\times$ \texttt{dataVerifierBondPerData}, which covers multiple verifications; when the bond is insufficient, the transaction is reverted and the verifier can top it up and retry.
+Senders, on the other hand, are required to deposit \texttt{maxDataPerSender} $\times$ \texttt{dataSenderBondPerData} upfront.
+Since the bond decreases by \texttt{dataSenderBondPerData} for every submission and cannot be topped up, it effectively caps the number of contributions a sender can make per campaign.
+
+For this reason, the bond payment constitutes an intermediate phase between enrollment and data submission.
+Bond payment is located in the complete workflow as shown in figure~\ref{fig:proto-design-pay-bond}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-bond-payment-out}
+        \caption{Paying bond workflow}\label{fig:proto-design-pay-bond}
+    \end{center}\label{fig:proto-design-pay-bond-container}
+\end{figure}
+
 \section{Security analysis and issues}\label{sec:security-analysis-issues}
+
