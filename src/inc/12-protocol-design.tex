@@ -46,10 +46,11 @@ For clarity, the following notation is adopted throughout this chapter:
 \subsection{Initialization}\label{subsec:proto-init}
 Initialization phase consists of the following steps.
 The campaign initiator (\texttt{B}) deploys the smart contract, indicating all the parameters, described in Appendix~\ref{ch:appendix-a-parameters}.
+Before the deployment, \texttt{B} generates its pair of private/public key $(PK_B, SK_B)$ which is used for sender and verifiers enrollment (explained respectively in Section~\ref{subsec:proto-sender-enrollment} and Section~\ref{subsec:proto-verifier-enrollment}) and generates also an asymmetric key pair $(K_{enc}, K_{dec})$.
 After the deployment, the owner approves the transfer of a \texttt{totalDst}
 quantity of DST (described in~\ref{subsec:data-sent-token}) to the smart contract address,
 and then confirms the deposit.
-All interaction are shown in figure~\ref{fig:proto-phase-init}
+All interactions are shown in figure~\ref{fig:proto-phase-init}
 
 \begin{figure}
     \begin{center}
@@ -61,29 +62,29 @@ All interaction are shown in figure~\ref{fig:proto-phase-init}
 \subsection{Sender enrollment}\label{subsec:proto-sender-enrollment}
 Any sender who wants to contribute to the crowdsensing campaign has to generate a private/public key pair. $(PK_S, SK_S)$
 Subsequently, \texttt{S} retrieves the public key of \texttt{B} from the smart contract.
-So \texttt{S} computes:
+Then \texttt{S} computes:
 \[
-    c_1 = \text{Enc}(PK_S, PK_B)
+    c^{S}_{1} = \text{Enc}(PK_S, PK_B)
 \]
-and sends $c_1$ to the smart contract.
+and sends $c^{S}_{1}$ to the smart contract.
 Upon receiving the ciphertext, the smart contract emits an event that \texttt{B} monitors.
-When \texttt{B} detects the event, it retrieves the sender address and $c_1$from it.
+When \texttt{B} detects the event, it retrieves the sender address and $c^{S}_{1}$from it.
 
 Then \texttt{B} computes:
 \[
-    PK_S = \text{Dec}(c_1, SK_B)
+    PK_S = \text{Dec}(c^{S}_{1}, SK_B)
 \]
 At this point, \texttt{B} possesses \texttt{S}'s public key and can establish a secure channel. \texttt{B} computes:
 \[
-    c_2 = \text{Enc}(K_{enc}, PK_S)
+    c^{S}_{2} = \text{Enc}(K_{enc}, PK_S)
 \]
-And sends $c_2$ to the smart contract which triggers an event to notify \texttt{S}.
-Finally, \texttt{S} retrieves $c_2$ from the emitted event and computes
+And sends $c^{S}_{2}$ to the smart contract which triggers an event to notify \texttt{S}.
+Finally, \texttt{S} retrieves $c^{S}_{2}$ from the emitted event and computes
 \[
-    K_{enc} = \text{Dec}(c_2, SK_S)
+    K_{enc} = \text{Dec}(c^{S}_{2}, SK_S)
 \]
 This key will be used for CID encryption, as shown in Section~\ref{subsec:proto-datasubmit}.
-All interaction are shown in figure~\ref{fig:proto-design-workflow-sender-join}
+All interactions are shown in figure~\ref{fig:proto-design-workflow-sender-join}
 
 \begin{figure}
     \begin{center}
@@ -93,7 +94,51 @@ All interaction are shown in figure~\ref{fig:proto-design-workflow-sender-join}
 \end{figure}
 
 \subsection{Verifier enrollment}\label{subsec:proto-verifier-enrollment}
+Verifiers contribute to crowdsensing campaign by performing data quality checks on the data.
+Any verifier who wants to contribute to the crowdsensing campaign has to generate a private/public key pair $(PK_V, SK_V)$.
+Subsequently, \texttt{V} retrieves the public key of \texttt{B} from the smart contract.
+Then \texttt{V} computes:
+\[
+    c^{V}_{1} = \text{Enc}(PK_V, PK_B)
+\]
+then sends $c^{V}_{1}$ to the smart contract.
+
+Upon receiving the ciphertext, the smart contract emits an event that \texttt{B} monitors.
+When \texttt{B} detects the event, it retrieves the verifier address and $c^{V}_{1}$ from it.
+
+Then \texttt{B} computes:
+\[
+    PK_V = \text{Dec}(c^{V}_{1}, SK_B)
+\]
+At this point, \texttt{B} possesses \texttt{V}'s public key and can establish a secure channel. \texttt{B} computes:
+\[
+    c^{V}_{2} = \text{Enc}(K_{dec}, PK_V)
+\]
+and sends $c^{V}_{2}$ to the smart contract which triggers an event to notify \texttt{V}.
+Finally, \texttt{V} retrieves $c^{V}_{2}$ from the emitted event and computes
+\[
+    K_{dec} = \text{Dec}(c^{V}_{2}, SK_V)
+\]
+This key will be used for CID decryption, as shown in Section~\ref{subsec:proto-verification}.
+All interactions are shown in figure~\ref{fig:proto-design-workflow-verifier-join}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-out}
+        \caption{Verifier phase workflow}\label{fig:proto-design-workflow-verifier-join}
+    \end{center}\label{fig:proto-design-workflow-verifier-join-container}
+\end{figure}
+
 \subsection{Data submission}\label{subsec:proto-datasubmit}
+Data submission is the main process of the protocol.
+It enables senders to contribute data references to the campaign.
+When \texttt{S} has data for the campaign, it encrypts data with $K_{enc}$ key and uploads the encrypted data to IPFS.
+IPFS returns a Content Identifier (CID, see Section~\ref{subsec:ipfs})
+\[
+    CID_{ciphered} = \text{Enc}(\text{CID}, K_{enc})
+\]
+Then \texttt{S} sends $CID_{ciphered}$ to the smart contract along with the geographic position of the measurement.
+Once the data is registered, a specific event is emitted by the smart contract which is monitored by verifiers.
+This concludes the data submission phase and triggers the verification phase (described in Section ~\ref{subsec:proto-verification}).
 \subsection{Verification}\label{subsec:proto-verification}
 \subsection{Data publishing}\label{subsec:proto-data-publish}
 
