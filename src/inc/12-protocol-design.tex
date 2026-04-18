@@ -30,6 +30,9 @@ In addition, this actor handle the payment model and the bond mechanism, describ
 The smart contract acts as the sole communication channel between participants, eliminating direct interaction.
 It stores encrypted cryptographic material and data references on-chain, and enforces campaign lifecycle rules such as participation thresholds and automatic closure.
 
+\section{Chunking system}\label{sec:chunking-system}
+TODO % TODO
+
 
 \section{Protocol workflow}\label{sec:proto-workflow}
 The protocol workflow is described in the following subsections.
@@ -54,7 +57,7 @@ All interactions are shown in Figure~\ref{fig:proto-phase-init}
 
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-initialization-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-initialization-out}
         \caption{Initialization phase workflow}\label{fig:proto-phase-init}
     \end{center}\label{fig:proto-phase-init-container}
 \end{figure}
@@ -88,7 +91,7 @@ All interactions are shown in Figure~\ref{fig:proto-design-workflow-sender-join}
 
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-sender-enrollment-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-sender-enrollment-out}
         \caption{Sender phase workflow}\label{fig:proto-design-workflow-sender-join}
     \end{center}\label{fig:proto-design-workflow-sender-join-container}
 \end{figure}
@@ -123,7 +126,7 @@ This key will be used for CID decryption, as shown in Section~\ref{subsec:proto-
 All interactions are shown in Figure~\ref{fig:proto-design-workflow-verifier-join}
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-out}
         \caption{Verifier phase workflow}\label{fig:proto-design-workflow-verifier-join}
     \end{center}\label{fig:proto-design-workflow-verifier-join-container}
 \end{figure}
@@ -142,7 +145,7 @@ This concludes the data submission phase and triggers the verification phase (de
 All interactions are shown in Figure~\ref{fig:proto-design-data-submission}
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-data-submission-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-data-submission-out}
         \caption{Data submission workflow}\label{fig:proto-design-data-submission}
     \end{center}\label{fig:proto-design-data-submission-container}
 \end{figure}
@@ -177,7 +180,7 @@ Once the data entry is flagged, payments and penalties are applied, as described
 All interactions are shown in Figure~\ref{fig:proto-design-verification}
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-verification-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verification-out}
         \caption{Verification process workflow}\label{fig:proto-design-verification}
     \end{center}\label{fig:proto-design-verification-container}
 \end{figure}
@@ -215,7 +218,7 @@ Bond payment is located in the complete workflow as shown in Figure~\ref{fig:pro
 All parameters shown in this section are explained in Table~\ref{tab:params-needs}
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-bond-payment-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-bond-payment-out}
         \caption{Paying bond workflow}\label{fig:proto-design-pay-bond}
     \end{center}\label{fig:proto-design-pay-bond-container}
 \end{figure}
@@ -225,7 +228,7 @@ In this section the security properties of the protocol are analyzed and known l
 The following sections discuss how to address the exposed issues and limitations of this protocol, or their extension.
 
 \subsection{Formal verification (ProVerif)}\label{subsec:security-analysis-issues-proverif}
-The presented protocol has been formally verified using ProVerif and is secure under the Dolev-Yao threat model~\cite{dolev1983security} if all the actors behave honestly:
+The presented protocol has been formally verified using ProVerif and is secure under the Dolev-Yao threat model~\cite{dolev1983security, blanchet2001proverif} if all the actors behave honestly:
 an external adversary $\mathcal{A}$ cannot recover the plaintext $CID$ from $CID_{ciphered}$ and cannot decrypt the data stored on IPFS.
 Modeling and execution are described in the Appendix~\ref{ch:appendix-b-proverif-v1-honest}.
 
@@ -237,9 +240,66 @@ This issue requires that the senders must trust not only the campaign initiator,
 The attack is shown in Figure~\ref{fig:proto-design-malicious-verifier-attack}.
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-malicious-verifier-attack-out}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-malicious-verifier-attack-out}
         \caption{malicious verifier attack in action}\label{fig:proto-design-malicious-verifier-attack}
     \end{center}\label{fig:proto-design-malicious-verifier-attack-container}
 \end{figure}
 
-% TODO: OTHER ISSUES: UNUSED GEOGRAPHICAL - BOND - REPUTATION?
+\subsection{Geographic incentive imbalance}\label{subsec:security-analysis-issues-unused-geography}
+The proposed protocol introduces a coordinate system and uses it to partition collected data into geographic chunks.
+Consider the following scenario: \texttt{B} starts a campaign in an area where some chunks cover urban zones and others cover rural ones.
+Since urban areas have significantly more inhabitants than rural ones, it is reasonable to assume that data submissions concentrate in chunks covering cities.
+In the current protocol, the rewarding system offers no additional incentive to collect data in less populated areas.
+Furthermore, the privacy of senders in rural areas is more at risk due to lower population density, as fewer submissions per chunk make individual contributions easier to identify,
+a concern consistent with the broader spatio-temporal privacy risks in MCS~\cite{montori2023privacy}.
+The current protocol does not differentiate incentives by geographic density, leaving rural coverage and the associated privacy risk unaddressed.
+A possible extension could introduce density-aware reward multipliers, encouraging submissions in underrepresented chunks while discouraging over-contribution in saturated ones.
+
+\subsection{Centrality of B}\label{subsec:security-analysis-issues-centrality-b}
+The centrality of the campaign initiator can be considered a threat to the protocol, but it is also essential to its design: \texttt{B} funds the campaign by paying for data collection and the verification process.
+\texttt{B} has a direct economic interest in behaving honestly; moreover, the \texttt{totalDst} amount (described in Table~\ref{tab:params-rewards}) is locked in the smart contract and cannot be withdrawn by \texttt{B}.
+However, if \texttt{B}'s private key $SK_B$ is compromised, an adversary gains the ability to decrypt all actors' public keys and forge key deliveries, compromising the entire campaign.
+Distributing \texttt{B}'s role through techniques such as threshold cryptography~\ref{shamir1979share} or multi-party key generation could mitigate this risk and is left as a possible future extension.
+
+\subsection{Address linkability}\label{subsec:security-analysis-issues-address-linkability}
+Senders interact with the smart contract through a single account and cannot change their address throughout the campaign.
+As a consequence, all submissions from the same sender are linkable: an observer can count the number of data entries a specific address has submitted and infer activity patterns.
+If a sender reaches the \texttt{maxDataPerSender} limit (described in Table~\ref{tab:params-needs}) and wishes to continue contributing, they must create a new account and deposit the bond again.
+The transfer of DST should be made with privacy-first currencies in DEX swappers for unlink the new account to the old one~\cite{montori2023privacy}.
+If the sender behaved honestly during the first submissions, the bond is fully refunded and can be reused for the new account.
+This trade-off was accepted deliberately: using a single address simplifies bond accounting and enables the \texttt{maxDataPerSender} cap, at the cost of submission linkability.
+
+\subsection{Verifier penalties}\label{subsec:security-analysis-verifiers-no-penalties}
+In the current protocol, the only penalty a verifier faces for incorrect behaviour is the loss of the deposited bond, which may be insufficient to deter sustained malicious activity.
+A possible improvement would introduce a reputation mechanism: past incorrect verifications should be recorded and forgiven only after $n$ subsequent correct verifications, or the verifier should be removed after $m$ accumulated incorrect verifications.
+This ensures, on the one hand, that the verifier maintains honest behaviour over time, and, on the other, that occasional mistakes do not lead to immediate removal.
+
+Furthermore, a verification slot manipulation attack is possible.
+Since all verification results are publicly visible on the blockchain, an elected verifier can delay its
+submission and observe the votes of other verifiers.
+Once the majority outcome becomes apparent, the verifier submits a vote
+aligned with the majority just before the timeout, guaranteeing
+the reward without performing any actual data validation.
+
+A robust solution would require a commit-reveal scheme~\cite{brassard1983commitreveal, eip1011}, where verifiers first commit a hash of their vote and later reveal the actual result.
+This would prevent verifiers from observing others' votes before submitting their own.
+However, implementing commit-reveal on-chain introduces additional gas costs and protocol complexity, and is left as a future extension.
+
+\subsection{Verifier sybill}\label{subsec:security-analysis-verifier-sybill}
+Sybill is a problem~\cite{douceur2002sybil}.
+TODO % TODO - CONTINUE
+
+\section{Addressing issues}\label{sec:addressing-issues}
+In this section some solution at design-level are proposed to solve the issues described in
+Section~\ref{subsec:security-analysis-issues-verifier-attack},
+Section~\ref{subsec:security-analysis-issues-unused-geography}
+and Section~\ref{subsec:security-analysis-verifiers-no-penalties}.
+
+\subsection{Addressing trusted verifier issue}\label{subsec:addressing-issues-trusted-verifier-issue}
+TODO % TODO
+
+\subsection{Addressing geographical incentive issue}\label{subsec:addressing-issues-geographical-incentive-issue}
+TODO % TODO
+
+\subsection{Addressing lack of verifier penalties}\label{subsec:addressing-issues-missing-verifier-penalties}
+TODO % TODO
