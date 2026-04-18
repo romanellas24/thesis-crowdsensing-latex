@@ -1,0 +1,40 @@
+@startuml malicious_verifier_attack
+title Malicious verifier attack
+
+database "Blockchain\n(BC) " as BC
+actor "Adversary\n(A)" as A
+participant "Smart Contract\n(SC)" as SC
+actor "Campaign Initiator\n(B)" as B
+database "IPFS" as IPFS
+actor "Honest Sender\n(S)" as S
+
+
+== Sender submits data ==
+
+S -> IPFS : Upload Enc(data, K_enc)
+S -> SC : Submit CID_ciphered
+
+note over A : A can join at any time\nand retrieve all the data
+== Verifier enrollment ==
+
+A -> SC : Enroll as Verifier
+B -> SC : Deliver K_dec to A
+SC -> A : K_dec
+
+note over A : A now holds K_dec\nafter this moment A\ndoesn't need to interact with SC
+
+== A exploits public blockchain visibility ==
+
+A -> BC : Read CID_ciphered
+A -> A : CID = Dec(CID_ciphered, K_dec)
+A -> IPFS : Retrieve encrypted data using CID
+IPFS --> A : Enc(data, K_enc)
+A -> A : data = Dec(Enc(data, K_enc), K_dec)
+
+note over A #FAECE7
+  A can decrypt data from any sender
+  without being elected to the
+  corresponding verification slot
+end note
+
+@enduml

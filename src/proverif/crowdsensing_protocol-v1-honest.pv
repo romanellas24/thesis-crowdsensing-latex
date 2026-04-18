@@ -1,0 +1,249 @@
+(* ProVerif model: Privacy-Enhanced Decentralized Crowdsensing       *)
+(*                                                                   *)
+(* Four actors: S (sender), V (verifier), B (owner), SC (contract)  *)
+(*                                                                   *)
+(* SC mediates ALL interactions and enforces access control via      *)
+(* require(msg.sender == ...) checks. Each require is modeled as     *)
+(* a private channel that only the authorized actor can write to.    *)
+(*                                                                   *)
+(* The attacker observes all SC events on a public channel but       *)
+(* cannot bypass SC's access control to inject messages.             *)
+
+
+
+(* Cryptographic primitives *)
+type skey.
+
+fun pk(skey): bitstring.
+fun aenc(bitstring, bitstring): bitstring.
+reduc forall m: bitstring, k: skey;
+    adec(aenc(m, pk(k)), k) = m.
+
+(* Type converter: allows Kdec (a secret key) to be transmitted
+   as a message payload from B to V via SC. *)
+fun skey_to_bitstring(skey): bitstring [data, typeConverter].
+
+
+(* Channels                                                           *)
+(*                                                                   *)
+(* Each private channel models a require()-protected SC function.    *)
+(* The channel name reflects the Solidity function it represents.    *)
+(*                                                                   *)
+(* Public channel: models emitted events and public view functions.  *)
+(* The Dolev-Yao attacker has full read/write access to pub and ipfs *)
+(* but CANNOT read or write private channels.                        *)
+
+(* Public: attacker observes all events *)
+free pub:  channel.
+free ipfs: channel.
+
+(* S -> SC: publishEncryptedSenderPublicKey()
+   In the contract, anyone can call this function. We model it as
+   private because the attacker enrolling as a sender is addressed
+   separately in compromise scenarios. In the honest scenario, only
+   legitimate senders enroll. *)
+free ch_s_enroll: channel [private].
+
+(* V -> SC: publishEncryptedVerifierPublicKey()
+   Same reasoning as sender enrollment. *)
+free ch_v_enroll: channel.
+
+(* B -> SC: publishSenderEncryptionKey()
+   require(msg.sender == _owner) *)
+free ch_b_sender_key: channel [private].
+
+(* B -> SC: publishVerifierDecryptionKey()
+   require(msg.sender == _owner) *)
+free ch_b_verifier_key: channel [private].
+
+(* SC -> B: event notifications for enrollment
+   Models B monitoring SenderEnrolledEvent / VerifierEnrolledEvent.
+   Private because SC events are authentic: the attacker cannot
+   forge events from a contract they do not control. *)
+free ch_sc_notify_b_sender:   channel [private].
+free ch_sc_notify_b_verifier: channel [private].
+
+(* SC -> S: SenderEncryptionKeyReady event
+   Private because contract events are authentic and tamper-proof.
+   The attacker observes the ciphertext on pub but cannot replace
+   what S receives from SC. *)
+free ch_sc_to_s: channel [private].
+
+(* SC -> V: VerifierDecryptionKeyReady / VerifierElected events
+   Same reasoning: authentic contract event delivery. *)
+free ch_sc_to_v: channel [private].
+
+(* S -> SC: publishIpfsCid()
+   require(_senders[msg.sender]) so only enrolled senders *)
+free ch_s_data: channel [private].
+
+
+
+(* Secrets under test   *)
+free secret_cid:  bitstring [private].
+free secret_data: bitstring [private].
+
+
+
+(* Events *)
+event SenderSubmittedCID(bitstring).
+event VerifierObtainedCID(bitstring).
+
+
+(* Security queries  *)
+
+(* Q1: Can the attacker learn the plaintext CID? *)
+query attacker(secret_cid).
+
+(* Q2: Can the attacker learn the plaintext data stored on IPFS? *)
+query attacker(secret_data).
+
+
+
+(* Process SC: Smart Contract                                         *)
+(*                                                                   *)
+(* SC is a passive mediator with three replicated handlers:          *)
+(*   1. Sender enrollment: receives from S, notifies B, receives     *)
+(*      B's response, delivers to S, emits public events.            *)
+(*   2. Verifier enrollment: same flow for verifiers.                *)
+(*   3. Data submission: receives encrypted CID from enrolled S,     *)
+(*      delivers to V, emits public event.                            *)
+(*                                                                   *)
+(* Every input comes from a private channel that enforces the        *)
+(* corresponding require() check. Every event is also published      *)
+(* on pub so the attacker can observe ciphertexts.                   *)
+
+let processSC() =
+    (
+        (* --- Sender enrollment handler --- *)
+        (* Solidity: publishEncryptedSenderPublicKey() then
+                     publishSenderEncryptionKey() *)
+        !(
+            in(ch_s_enroll, enc_pkS: bitstring);
+            out(pub, enc_pkS);                        (* emit SenderEnrolledEvent *)
+            out(ch_sc_notify_b_sender, enc_pkS);      (* notify B *)
+
+            in(ch_b_sender_key, enc_kenc: bitstring);
+            out(pub, enc_kenc);                        (* emit SenderEncryptionKeyReady *)
+            out(ch_sc_to_s, enc_kenc)                  (* deliver to S *)
+        )
+    |
+        (* --- Verifier enrollment handler --- *)
+        (* Solidity: publishEncryptedVerifierPublicKey() then
+                     publishVerifierDecryptionKey() *)
+        !(
+            in(ch_v_enroll, enc_pkV: bitstring);
+            out(pub, enc_pkV);                          (* emit VerifierEnrolledEvent *)
+            out(ch_sc_notify_b_verifier, enc_pkV);      (* notify B *)
+
+            in(ch_b_verifier_key, enc_kdec: bitstring);
+            out(pub, enc_kdec);                          (* emit VerifierDecryptionKeyReady *)
+            out(ch_sc_to_v, enc_kdec)                    (* deliver to V *)
+        )
+    |
+        (* --- Data submission handler --- *)
+        (* Solidity: publishIpfsCid() with require(_senders[msg.sender]) *)
+        !(
+            in(ch_s_data, enc_cid: bitstring);
+            out(pub, enc_cid);                           (* emit DataVerificationRequestedEvent *)
+            out(ch_sc_to_v, enc_cid)                     (* deliver to V via VerifierElected *)
+        )
+    ).
+
+
+
+(* Process B: Campaign Initiator (Owner)                              *)
+(*                                                                   *)
+(* B generates key pairs, deploys SC (publishes pkB), and handles    *)
+(* enrollment notifications by distributing Kenc to senders and      *)
+(* Kdec to verifiers through SC's owner-only functions.              *)
+
+let processB(skB: skey, skData: skey) =
+    let kenc = pk(skData) in
+
+    (* Deploy: pkB becomes public via getInitiatorPublicKey() *)
+    out(pub, pk(skB));
+
+    (
+        (* --- Handle sender enrollment notifications --- *)
+        !(
+            in(ch_sc_notify_b_sender, enc_pkS: bitstring);
+            let pkS = adec(enc_pkS, skB) in
+            out(ch_b_sender_key, aenc(kenc, pkS))
+        )
+    |
+        (* --- Handle verifier enrollment notifications --- *)
+        !(
+            in(ch_sc_notify_b_verifier, enc_pkV: bitstring);
+            let pkV = adec(enc_pkV, skB) in
+            out(ch_b_verifier_key, aenc(skey_to_bitstring(skData), pkV))
+        )
+    ).
+
+
+
+(* Process S: Data Sender                                              *)
+(*                                                                   *)
+(* S generates (skS, pkS). Reads pkB from contract (parameter).     *)
+(* Enrolls via SC, receives Kenc, encrypts data + CID.               *)
+(*                                                                   *)
+(* pkB is passed as parameter: in the real contract, it is read via  *)
+(* getInitiatorPublicKey() from immutable contract state. This is    *)
+(* an authenticated public value that the attacker cannot replace.   *)
+
+let processS(skS: skey, pkB: bitstring, cid: bitstring, data: bitstring) =
+    (* publishEncryptedSenderPublicKey(Enc(PKS, PKB)) *)
+    out(ch_s_enroll, aenc(pk(skS), pkB));
+
+    (* Read SenderEncryptionKeyReady from SC *)
+    in(ch_sc_to_s, enc_kenc: bitstring);
+    let kenc = adec(enc_kenc, skS) in
+
+    (* Encrypt data with Kenc, upload to IPFS *)
+    out(ipfs, aenc(data, kenc));
+
+    (* publishIpfsCid(Enc(CID, Kenc)) *)
+    event SenderSubmittedCID(cid);
+    out(ch_s_data, aenc(cid, kenc)).
+
+
+
+(* Process V: Data Verifier                                            *)
+(*                                                                   *)
+(* V generates (skV, pkV). Reads pkB from contract (parameter).     *)
+(* Enrolls via SC, receives Kdec, retrieves and decrypts CID + data. *)
+let processV(skV: skey, pkB: bitstring) =
+    (* publishEncryptedVerifierPublicKey(Enc(PKV, PKB)) *)
+    out(ch_v_enroll, aenc(pk(skV), pkB));
+
+    (* Read VerifierDecryptionKeyReady from SC *)
+    in(ch_sc_to_v, enc_kdec: bitstring);
+    let kdec_bits = adec(enc_kdec, skV) in
+    let skey_to_bitstring(kdec) = kdec_bits in
+
+    (* Read VerifierElected: receive encrypted CID from SC *)
+    in(ch_sc_to_v, enc_cid: bitstring);
+    let cid = adec(enc_cid, kdec) in
+
+    (* Retrieve encrypted data from IPFS *)
+    in(ipfs, enc_data: bitstring);
+    let plaintext_data = adec(enc_data, kdec) in
+
+    event VerifierObtainedCID(cid).
+
+
+(* Main process (Honest scenario)                                     *)
+process
+    new skB: skey;
+    new skData: skey;
+    let pkB = pk(skB) in
+    (
+        processSC()
+      | processB(skB, skData)
+      | new skS: skey;
+        processS(skS, pkB, secret_cid, secret_data)
+      | !new skS_i: skey; new cid_i: bitstring; new data_i: bitstring;
+        processS(skS_i, pkB, cid_i, data_i)
+      | !new skV_i: skey;
+        processV(skV_i, pkB)
+    )

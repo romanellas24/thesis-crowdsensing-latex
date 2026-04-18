@@ -1,0 +1,99 @@
+\chapter{Formal Verification with ProVerif}\label{ch:appendix-b-proverif-v1-honest}
+
+This appendix presents the complete ProVerif model used for the formal security analysis discussed in Section~\ref{sec:security-analysis-issues}.
+The model captures the cryptographic key exchange and data submission protocol described in Chapter~\ref{ch:protocol-design},
+abstracting away non-cryptographic smart contract logic which falls outside the scope of symbolic protocol verification.
+
+\section{Modeling Assumptions}\label{sec:appendix-b-proverif-v1-honest-assumptions}
+The verification is performed under the Dolev-Yao attacker model~\cite{dolev1983security}, in which the adversary has full control over all public communication channels.
+In particular, the attacker is able to read, inject, modify, replay, and delete any message transmitted on a public channel.
+This provides a conservative upper bound on the adversary's capabilities: any property that holds under Dolev-Yao also holds against weaker, purely passive attackers.
+
+The protocol involves four actors: the data sender~$S$, the data verifier~$V$, the campaign initiator~$B$ (owner), and the smart contract~$SC$.
+Each of them modeled as a separate ProVerif process.
+The smart contract is modeled as an active intermediary rather than a passive public channel.
+This distinction is essential: in the real system, $SC$ enforces access control through Solidity \texttt{require} statements and the EVM guarantees the authenticity of emitted events~\cite{ethereum}.
+Table~\ref{tab:appendix-b-proverif-channels} summarizes how each channel in the model corresponds to a specific contract function or blockchain-level guarantee.
+
+\begin{table}
+    \centering
+    \begin{tabular}{lll}
+        \hline
+        \textbf{Channel} & \textbf{Contract function / mechanism} & \textbf{Security basis} \\
+        \hline
+        \texttt{ch\_b\_sender\_key}        & \texttt{publishSenderEncryptionKey()}    & \texttt{require(msg.sender == \_owner)} \\
+        \texttt{ch\_b\_verifier\_key}      & \texttt{publishVerifierDecryptionKey()}  & \texttt{require(msg.sender == \_owner)} \\
+        \texttt{ch\_s\_data}               & \texttt{publishIpfsCid()}                & \texttt{require(\_senders[msg.sender])} \\
+        \texttt{ch\_sc\_to\_s}             & \texttt{SenderEncryptionKeyReady} event  & Event authenticity (EVM) \\
+        \texttt{ch\_sc\_to\_v}             & \texttt{VerifierElected} event           & Event authenticity (EVM) \\
+        \texttt{ch\_sc\_notify\_b\_*}      & \texttt{SenderEnrolledEvent} and similar & Event authenticity (EVM) \\
+        \texttt{ch\_s\_enroll}             & \texttt{publishEncryptedSenderPK()}      & Honest scenario assumption \\
+        \texttt{ch\_v\_enroll}             & \texttt{publishEncryptedVerifierPK()}    & Honest scenario assumption \\
+        \texttt{pub}                       & All emitted events                       & Public (attacker observes) \\
+        \texttt{ipfs}                      & IPFS data storage                        & Public (attacker observes) \\
+        \hline
+    \end{tabular}
+    \caption{Mapping between ProVerif channels, contract functions, and security mechanisms.}
+    \label{tab:appendix-b-proverif-channels}
+\end{table}
+
+The initiator's public key $PK_B$ is passed as a parameter to processes $S$ and $V$ rather than being read from a public channel.
+This models the fact that $PK_B$ is embedded in the smart contract at deployment time and retrieved via \texttt{getInitiatorPublicKey()}, a read from immutable contract storage whose integrity is guaranteed by blockchain consensus~\cite{bitcoin, ethereum}.
+In addition, enrollment channels are modeled as private,restricting participation to honest senders and verifiers (see Section~\ref{sec:appendix-b-proverif-v1-honest-limitations} for further discussion).
+
+\section{Security Queries}\label{sec:appendix-b-proverif-v1-honest-queries}
+Two secrecy queries are verified:
+\begin{description}
+    \item[Q1: CID Confidentiality.] The attacker cannot derive the plaintext Content Identifier (CID) from the encrypted value $Enc(CID, K_{enc})$ published on the blockchain.
+    \item[Q2: Data Confidentiality.] The attacker cannot derive the plaintext data from the encrypted content $Enc(data, K_{enc})$ stored on IPFS.
+\end{description}
+Both queries hold under the Dolev-Yao model, confirming that even an active adversary with full control over public channels cannot recover the plaintext CID or data, provided that: (i)~the smart contract's access control mechanisms (\texttt{require} checks) function correctly, (ii)~blockchain event authenticity is preserved, and (iii)~all enrolled participants behave honestly.
+
+\section{Limitations}\label{sec:appendix-b-proverif-v1-honest-limitations}
+ProVerif operates in the symbolic (Dolev-Yao) model, which assumes perfect cryptographic primitives.
+Consequently, the verification does not account for implementation-level vulnerabilities such as weak randomness, side-channel attacks, or flaws in specific cryptographic libraries.
+
+The enrollment channels (\texttt{ch\_s\_enroll}, \texttt{ch\_v\_enroll}) are modeled as private, reflecting the honest scenario in which only legitimate actors participate.
+In the real contract, these functions lack role-based access control and can be called by any address.
+\section{ProVerif Model Source Code}\label{sec:appendix-b-proverif-source}
+The complete ProVerif model is listed below.
+\lstdefinelanguage{ProVerif}{
+    morekeywords={free,fun,reduc,forall,type,query,attacker,event,let,in,out,new,process,channel,bitstring,skey,data,typeConverter,private},
+    sensitive=true,
+    morecomment=[s]{(*}{*)},
+    morestring=[b]",
+}
+
+\lstset{
+    language=ProVerif,
+    basicstyle=\ttfamily\scriptsize,
+    keywordstyle=\bfseries,
+    commentstyle=\itshape\color{gray},
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=5pt,
+    captionpos=b,
+    tabsize=4,
+    showstringspaces=false,
+}
+
+\lstinputlisting[
+    caption={ProVerif model of the crowdsensing protocol.},
+    label={lst:appendix-b-proverif-model}
+]{proverif/crowdsensing_protocol-v1-honest.pv}
+
+The result of the execution is
+
+\begin{lstlisting}[caption={ProVerif verification output for the crowdsensing protocol model.},label={lst:appendix-b-proverif-model-results}]
+...
+--------------------------------------------------------------
+Verification summary:
+
+Query not attacker(secret_cid[]) is true.
+
+Query not attacker(secret_data[]) is true.
+
+--------------------------------------------------------------
+\end{lstlisting}

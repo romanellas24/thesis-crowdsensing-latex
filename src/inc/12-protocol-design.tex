@@ -50,7 +50,7 @@ Before the deployment, \texttt{B} generates its pair of private/public key $(PK_
 After the deployment, the owner approves the transfer of a \texttt{totalDst}
 quantity of DST (described in~\ref{subsec:data-sent-token}) to the smart contract address,
 and then confirms the deposit.
-All interactions are shown in figure~\ref{fig:proto-phase-init}
+All interactions are shown in Figure~\ref{fig:proto-phase-init}
 
 \begin{figure}
     \begin{center}
@@ -84,12 +84,12 @@ Finally, \texttt{S} retrieves $c^{S}_{2}$ from the emitted event and computes
     K_{enc} = \text{Dec}(c^{S}_{2}, SK_S)
 \]
 This key will be used for CID encryption, as shown in Section~\ref{subsec:proto-datasubmit}.
-All interactions are shown in figure~\ref{fig:proto-design-workflow-sender-join}
+All interactions are shown in Figure~\ref{fig:proto-design-workflow-sender-join}
 
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-sender-enrollment-out}
-        \caption{Initialization phase workflow}\label{fig:proto-design-workflow-sender-join}
+        \caption{Sender phase workflow}\label{fig:proto-design-workflow-sender-join}
     \end{center}\label{fig:proto-design-workflow-sender-join-container}
 \end{figure}
 
@@ -120,7 +120,7 @@ Finally, \texttt{V} retrieves $c^{V}_{2}$ from the emitted event and computes
     K_{dec} = \text{Dec}(c^{V}_{2}, SK_V)
 \]
 This key will be used for CID decryption, as shown in Section~\ref{subsec:proto-verification}.
-All interactions are shown in figure~\ref{fig:proto-design-workflow-verifier-join}
+All interactions are shown in Figure~\ref{fig:proto-design-workflow-verifier-join}
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-out}
@@ -139,7 +139,7 @@ IPFS returns a Content Identifier (CID, see Section~\ref{subsec:ipfs})
 Then \texttt{S} sends $CID_{ciphered}$ to the smart contract along with the geographic position of the measurement.
 Once the data is registered, a specific event is emitted by the smart contract which is monitored by verifiers.
 This concludes the data submission phase and triggers the verification phase (described in Section ~\ref{subsec:proto-verification}).
-All interactions are shown in figure~\ref{fig:proto-design-data-submission}
+All interactions are shown in Figure~\ref{fig:proto-design-data-submission}
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-data-submission-out}
@@ -150,7 +150,7 @@ All interactions are shown in figure~\ref{fig:proto-design-data-submission}
 \subsection{Verification}\label{subsec:proto-verification}
 The verification phase is performed by verifiers, whose goal is to determine whether a given data entry meets the quality requirements of the campaign.
 To mitigate the risk of a single malicious or faulty verifier, each data entry is independently verified through multiple \textit{verification slots}.
-The number of slots is configured to be odd, so that a strict majority decision is always reachable and ties are structurally avoided.
+The number of slots is conFigured to be odd, so that a strict majority decision is always reachable and ties are structurally avoided.
 Slots are not statically assigned: each verifier must explicitly request authorization, and the smart contract elects it to an available slot only if the eligibility and cooldown constraints are satisfied.
 
 A verifier \texttt{V} can request authorization either upon receiving a \texttt{DataVerificationRequestedEvent} or by polling autonomously.
@@ -174,7 +174,7 @@ As soon as a strict majority of slots agrees on a result (either positive or neg
 Any remaining unfilled slots are no longer needed and are effectively discarded.
 If \texttt{V} cannot complete the task or misses the deadline, it can submit the special result \texttt{CANNOT\_COMPLETE}; in this case, the verification slot is released and becomes available for reassignment.
 Once the data entry is flagged, payments and penalties are applied, as described in Section~\ref{sec:incentive-mechanisms}.
-All interactions are shown in figure~\ref{fig:proto-design-verification}
+All interactions are shown in Figure~\ref{fig:proto-design-verification}
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-verification-out}
@@ -193,8 +193,8 @@ Data Sent Token (DST) is a custom ERC-20~\cite{eip20} token used to incentivize 
 The rewarding system is  configurable by \texttt{B}.
 The working process is quite straightforward: when a data entry is flagged as \texttt{VALID} or \texttt{INVALID} the rewarding process is triggered:
 \begin{enumerate}
-    \item If the data is \texttt{VALID}, the smart contract rewards \texttt{S} with the configured payout. If the data is \texttt{INVALID}, \texttt{S} receives no payout.
-    \item Verifiers, on the other hand, are rewarded conditionally: only verifiers who voted according to the final verification result receive the configured payout. Verifiers who submitted a contradicting vote receive no reward.
+    \item If the data is \texttt{VALID}, the smart contract rewards \texttt{S} with the conFigured payout. If the data is \texttt{INVALID}, \texttt{S} receives no payout.
+    \item Verifiers, on the other hand, are rewarded conditionally: only verifiers who voted according to the final verification result receive the conFigured payout. Verifiers who submitted a contradicting vote receive no reward.
 \end{enumerate}
 
 \subsection{Bond system}\label{subsec:proto-bond-model}
@@ -211,7 +211,7 @@ Senders, on the other hand, are required to deposit \texttt{maxDataPerSender} $\
 Since the bond decreases by \texttt{dataSenderBondPerData} for every submission and cannot be topped up, it effectively caps the number of contributions a sender can make per campaign.
 
 For this reason, the bond payment constitutes an intermediate phase between enrollment and data submission.
-Bond payment is located in the complete workflow as shown in figure~\ref{fig:proto-design-pay-bond}.
+Bond payment is located in the complete workflow as shown in Figure~\ref{fig:proto-design-pay-bond}.
 All parameters shown in this section are explained in Table~\ref{tab:params-needs}
 \begin{figure}
     \begin{center}
@@ -220,5 +220,26 @@ All parameters shown in this section are explained in Table~\ref{tab:params-need
     \end{center}\label{fig:proto-design-pay-bond-container}
 \end{figure}
 
-\section{Security analysis and issues}\label{sec:security-analysis-issues}
+\section{Security analysis and other issues}\label{sec:security-analysis-issues}
+In this section the security properties of the protocol are analyzed and known limitations are discussed.
+The following sections discuss how to address the exposed issues and limitations of this protocol, or their extension.
 
+\subsection{Formal verification (ProVerif)}\label{subsec:security-analysis-issues-proverif}
+The presented protocol has been formally verified using ProVerif and is secure under the Dolev-Yao threat model~\cite{dolev1983security} if all the actors behave honestly:
+an external adversary $\mathcal{A}$ cannot recover the plaintext $CID$ from $CID_{ciphered}$ and cannot decrypt the data stored on IPFS.
+Modeling and execution are described in the Appendix~\ref{ch:appendix-b-proverif-v1-honest}.
+
+\subsection{Malicious verifier attack}\label{subsec:security-analysis-issues-verifier-attack}
+In the current protocol, the adversary $\mathcal{A}$ can join as a verifier and if the campaign initiator $B$ accepts them as a verifier, then $\mathcal{A}$ is able to read all the data transmitted, regardless of which verifier is elected for a specific data entry.
+This follows from the public visibility of $CID_{ciphered}$ values on the blockchain and the shared $K_{dec}$ among all enrolled verifiers.
+Since all transactions are publicly visible on the blockchain, $\mathcal{A}$ can observe every $CID_{ciphered}$ submitted by any sender and can decrypt $CID_{ciphered}$ and the corresponding data using $K_{dec}$.
+This issue requires that the senders must trust not only the campaign initiator, but also every enrolled verifier.
+The attack is shown in Figure~\ref{fig:proto-design-malicious-verifier-attack}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.6\textwidth]{diagrams/proto-design-workflow-bond-payment-out}
+        \caption{malicious verifier attack in action}\label{fig:proto-design-malicious-verifier-attack}
+    \end{center}\label{fig:proto-design-malicious-verifier-attack-container}
+\end{figure}
+
+% TODO: OTHER ISSUES: UNUSED GEOGRAPHICAL - BOND - REPUTATION?
