@@ -26,7 +26,7 @@ jobs:
           texlive_version: 2024
 
       - name: Rename full version
-        run: mv src/main.pdf src/thesis-full.pdf
+        run: mv src/main.pdf src/daniele-romanella-tesi-full.pdf
 
       - name: Compile thesis (official)
         uses: xu-cheng/latex-action@v4
@@ -36,19 +36,19 @@ jobs:
           texlive_version: 2024
 
       - name: Rename official version
-        run: mv src/main-official.pdf src/thesis-official.pdf
+        run: mv src/main-official.pdf src/daniele-romanella-tesi-official.pdf
 
       - name: Upload artifact (full)
         uses: actions/upload-artifact@v4
         with:
-          name: thesis-full
-          path: src/thesis-full.pdf
+          name: daniele-romanella-tesi-full
+          path: src/daniele-romanella-tesi-full.pdf
 
       - name: Upload artifact (official)
         uses: actions/upload-artifact@v4
         with:
-          name: thesis-official
-          path: src/thesis-official.pdf
+          name: daniele-romanella-tesi-official
+          path: src/daniele-romanella-tesi-official.pdf
 
       - name: Release thesis
         uses: softprops/action-gh-release@v2
@@ -57,5 +57,5 @@ jobs:
           tag_name: latest
           name: Latest build
           files: |
-            src/thesis-full.pdf
-            src/thesis-official.pdf
+            src/daniele-romanella-tesi-full.pdf
+            src/daniele-romanella-tesi-official.pdf
