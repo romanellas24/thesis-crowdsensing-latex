@@ -1,0 +1,43 @@
+@startuml datum_lifecycle
+title Lifecycle of a single data entry
+
+[*] --> Submitted : S submits\nCID_ciphered + position
+
+state "Pending verification" as Pending {
+    state "Awaiting verifiers" as Awaiting
+    state "Slot assigned" as Assigned
+    state "Vote received" as Voted
+
+    Awaiting --> Assigned : V requests authorization\nand is elected
+    Assigned --> Voted : V submits result
+    Assigned --> Awaiting : Timeout or\nCANNOT_COMPLETE\n(slot freed)
+    Voted --> Awaiting : Majority not yet reached\n(next slot available)
+}
+
+Submitted --> Pending : DataVerificationRequestedEvent\nemitted
+
+Pending --> Valid : Positive majority reached
+Pending --> Invalid : Negative majority reached
+
+state Valid {
+}
+state Invalid {
+}
+
+Valid --> [*] : Sender rewarded + bond refunded\nCorrect verifiers rewarded + bond refunded\nIncorrect verifiers: bond forfeited
+Invalid --> [*] : Sender: bond forfeited\nCorrect verifiers rewarded + bond refunded\nIncorrect verifiers: bond forfeited
+
+note right of Pending
+  This cycle repeats for each
+  verification slot until a
+  strict majority is reached.
+  Slots = odd number (configurable).
+end note
+
+note bottom of Valid
+  If campaign thresholds
+  (dataNeeded, minimumParticipants)
+  are met, the campaign closes.
+end note
+
+@enduml

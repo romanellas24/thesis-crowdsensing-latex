@@ -185,6 +185,14 @@ All interactions are shown in Figure~\ref{fig:proto-design-verification}
     \end{center}\label{fig:proto-design-verification-container}
 \end{figure}
 
+The full data lifecycle is shown in Figure~\ref{fig:proto-design-datum-lifecycle}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/protocol-datum-lifecycle-out}
+        \caption{Life cycle of a single data entry}\label{fig:proto-design-datum-lifecycle}
+    \end{center}\label{fig:proto-design-datum-lifecycle-container}
+\end{figure}
+
 \section{Incentive mechanisms}\label{sec:incentive-mechanisms}
 The incentive mechanism consists of two different approaches: rewarding actors to encourage honest behaviour and penalizing actors discouraging dishonest behaviours.
 These approaches are enforced through a rewarding system (Section~\ref{subsec:proto-rewarding-model}) and a bond system (Section~\ref{subsec:proto-bond-model}).
@@ -223,6 +231,14 @@ All parameters shown in this section are explained in Table~\ref{tab:params-need
     \end{center}\label{fig:proto-design-pay-bond-container}
 \end{figure}
 
+The full campaign lifecycle is shown in Figure~\ref{fig:proto-design-campaign-lifecycle}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/protocol-campaign-lifecycle-out}
+        \caption{Campaign lifecycle}\label{fig:proto-design-campaign-lifecycle}
+    \end{center}\label{fig:proto-design-campaign-lifecycle-container}
+\end{figure}
+
 \section{Security analysis and other issues}\label{sec:security-analysis-issues}
 In this section the security properties of the protocol are analyzed and known limitations are discussed.
 The following sections discuss how to address the exposed issues and limitations of this protocol, or their extension.
@@ -241,7 +257,7 @@ The attack is shown in Figure~\ref{fig:proto-design-malicious-verifier-attack}.
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-malicious-verifier-attack-out}
-        \caption{malicious verifier attack in action}\label{fig:proto-design-malicious-verifier-attack}
+        \caption{Malicious verifier attack in action}\label{fig:proto-design-malicious-verifier-attack}
     \end{center}\label{fig:proto-design-malicious-verifier-attack-container}
 \end{figure}
 
@@ -259,7 +275,7 @@ A possible extension could introduce density-aware reward multipliers, encouragi
 The centrality of the campaign initiator can be considered a threat to the protocol, but it is also essential to its design: \texttt{B} funds the campaign by paying for data collection and the verification process.
 \texttt{B} has a direct economic interest in behaving honestly; moreover, the \texttt{totalDst} amount (described in Table~\ref{tab:params-rewards}) is locked in the smart contract and cannot be withdrawn by \texttt{B}.
 However, if \texttt{B}'s private key $SK_B$ is compromised, an adversary gains the ability to decrypt all actors' public keys and forge key deliveries, compromising the entire campaign.
-Distributing \texttt{B}'s role through techniques such as threshold cryptography~\ref{shamir1979share} or multi-party key generation could mitigate this risk and is left as a possible future extension.
+Distributing \texttt{B}'s role through techniques such as threshold cryptography~\cite{shamir1979share} or multi-party key generation could mitigate this risk and is left as a possible future extension.
 
 \subsection{Address linkability}\label{subsec:security-analysis-issues-address-linkability}
 Senders interact with the smart contract through a single account and cannot change their address throughout the campaign.
@@ -285,9 +301,24 @@ A robust solution would require a commit-reveal scheme~\cite{brassard1983commitr
 This would prevent verifiers from observing others' votes before submitting their own.
 However, implementing commit-reveal on-chain introduces additional gas costs and protocol complexity, and is left as a future extension.
 
-\subsection{Verifier sybill}\label{subsec:security-analysis-verifier-sybill}
-Sybill is a problem~\cite{douceur2002sybil}.
-TODO % TODO - CONTINUE
+\subsection{Sybil attack}\label{subsec:security-analysis-verifier-sybil}
+In the context of decentralized protocols, a Sybil attack occurs when a single adversary creates multiple identities to gain disproportionate influence over the system~\cite{douceur2002sybil}.
+In this protocol, a Sybil attack targets the verifier role: an adversary could create enough identities to control multiple verification slots,with two possible goals: accessing all campaign data without legitimate
+participation, or accumulating a majority of slots to drain rewards by forcing arbitrary verification outcomes.
+
+The Sybil attack is partially mitigated by two mechanisms:
+\begin{itemize}
+    \item \textbf{Economic barrier}: each verifier identity must deposit
+    a bond of \newline $n \times \texttt{dataVerifierBondPerData} \times
+    \texttt{maxDataPerVerifierPerBond}$ DST, raising the cost of
+    the attack proportionally to the number of identities created~\cite{chatzopoulos2018privacy, ying2025chaser};
+    \item \textbf{Enrollment control}: all verifiers must be accepted
+    by \texttt{B} during enrollment, providing an off-chain vetting
+    opportunity.
+\end{itemize}
+
+However, these defenses may be insufficient against a well-funded adversary (e.g., a state actor) for whom the bond cost is negligible.
+In such a scenario, the primary defense remains \texttt{B}'s ability to vet verifier enrollment requests through off-chain identity verification mechanisms.
 
 \section{Addressing issues}\label{sec:addressing-issues}
 In this section some solution at design-level are proposed to solve the issues described in

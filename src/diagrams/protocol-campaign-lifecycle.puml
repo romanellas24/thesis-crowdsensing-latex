@@ -1,0 +1,50 @@
+@startuml campaign_lifecycle
+title Campaign lifecycle
+
+[*] --> Deployment : B deploys SC\nwith PK_B and config
+
+Deployment --> Funded : B deposits totalDst\ninto SC
+
+Funded --> Enrollment : Campaign open
+
+state Enrollment {
+    state "Sender enrollment" as SE
+    state "Verifier enrollment" as VE
+    SE : S sends Enc(PK_S, PK_B)
+    SE : B delivers K_enc
+    VE : V sends Enc(PK_V, PK_B)
+    VE : B delivers K_dec
+}
+
+Enrollment --> BondPayment : Actors enrolled
+
+state "Bond payment" as BondPayment {
+    state "Sender bond" as SB
+    state "Verifier bond" as VB
+    SB : S deposits\nmaxDataPerSender ×\ndataSenderBondPerData
+    VB : V deposits\nmaxDataPerVerifierPerBond ×\ndataVerifierBondPerData
+}
+
+BondPayment --> Operating : Bonds deposited
+
+state "Operating" as Operating {
+    state "Data submission" as DS
+    state "Verification\n(per datum)" as Ver
+    DS : S uploads to IPFS\nand submits CID_ciphered
+    DS -right-> Ver : Event emitted
+    Ver : Slot assignment\nVerification\nMajority check\nReward / Forfeit
+    Ver -left-> DS : Next submission
+}
+
+Operating --> Closed : Campaign thresholds met\nor B closes manually
+
+Closed --> [*]
+
+note right of Operating
+  Enrollment and bond
+  payment can continue
+  during the operating
+  phase for new actors.
+end note
+
+@enduml
