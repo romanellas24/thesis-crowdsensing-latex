@@ -327,7 +327,36 @@ Section~\ref{subsec:security-analysis-issues-unused-geography}
 and Section~\ref{subsec:security-analysis-verifiers-no-penalties}.
 
 \subsection{Addressing trusted verifier issue}\label{subsec:addressing-issues-trusted-verifier-issue}
-TODO % TODO
+From the sender's perspective, the proposed protocol requires trusting not  only \texttt{B} but all current and future verifiers.
+This represents a strong discouragement for senders, as their data can be accessed by any enrolled verifier through the public blockchain, particularly if \texttt{B} accepts a malicious verifier.
+This issue can be addressed by modifying the verifier enrollment logic, as shown in Figure~\ref{fig:proto-data-enrollment-verification-novel}, and the data submission phase, as shown in Figure~\ref{fig:proto-data-submission-verification-workflow}.
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-novel-out}
+        \caption{Novel verifier enrollment phase}\label{fig:proto-data-enrollment-verification-novel}
+    \end{center}\label{fig:proto-data-enrollment-verification-novel-container}
+\end{figure}
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-data-submission-novel-out}
+        \caption{Data submission and novel verification workflow}\label{fig:proto-data-submission-verification-workflow}
+    \end{center}\label{fig:proto-data-submission-verification-workflow-container}
+\end{figure}
+
+The idea is straightforward: during verifier enrollment, \texttt{B} retains the  public key of every verifier locally.
+When a datum is submitted, \texttt{B} is notified through an event and generates a unique asymmetric key pair $(KD_{enc}, KD_{dec})$ for that data entry.
+Subsequently, \texttt{B} decrypts $CID_{ciphered}$ using $K_{dec}$ to obtain the original $CID$, retrieves the  encrypted data from IPFS, and decrypts it using $K_{dec}$.
+\texttt{B} then  re-encrypts the data using $KD_{enc}$ and uploads it to IPFS, obtaining a new  content identifier $CID_V$.
+\texttt{B} concludes this step by notifying the smart contract that the per-datum key material is ready.
+
+Once the smart contract is informed by \texttt{B}, it emits an event that verifiers monitor; upon receiving it, they can request verification authorization.
+When a verifier is elected to a slot, the smart contract notifies \texttt{B}, who constructs a \texttt{verification\_bundle} containing $CID_V$ and $KD_{dec}$, encrypted using the elected verifier's public key $PK_V$.
+Finally, \texttt{B} delivers the bundle to the smart contract, which emits an event notifying the elected verifier.
+
+This extension eliminates the shared $K_{dec}$ vulnerability: each verifier can only access data entries for which it has been specifically elected.
+However, this comes at the cost of increased workload for \texttt{B}, who must perform one re-encryption cycle per data entry, and additional IPFS storage, as each datum now exists in two encrypted forms.
 
 \subsection{Addressing geographical incentive issue}\label{subsec:addressing-issues-geographical-incentive-issue}
 TODO % TODO
