@@ -31,7 +31,78 @@ The smart contract acts as the sole communication channel between participants, 
 It stores encrypted cryptographic material and data references on-chain, and enforces campaign lifecycle rules such as participation thresholds and automatic closure.
 
 \section{Chunking system}\label{sec:chunking-system}
-TODO % TODO
+A fundamental challenge in implementing spatial crowdsensing on a smart contract is the lack of native floating-point support in the Solidity language~\cite{wood2014ethereum}.
+Since geographic coordinates are inherently expressed as real numbers, a coordinate remapping strategy is required to represent them as integers without loss of precision.
+This section describes the spatial partitioning model adopted by the smart contract and the fixed-point arithmetic used to handle geographic coordinates.
+
+\subsection{Coordinate remapping}\label{subsec:coordinate-remapping}
+Since Solidity does not support floating-point arithmetic natively as stated before, geographic coordinates are transmitted by clients as a
+\texttt{GlobalPosition} struct composed of four fields:
+the integer and decimal parts of latitude, and the integer and decimal parts of longitude,where the decimal component assumes a precision of up to seven digits after the decimal point.
+
+To enable arithmetic operations within the EVM, coordinates are converted into a compact signed integer representation known as E7 format, where one unit
+corresponds to $10^{-7}$ degrees, providing a spatial resolution of approximately $1.1$\,cm.
+The conversion is performed by the \texttt{packCoordinates} function, which produces a \texttt{PackedPosition}
+struct containing two \texttt{int32} fields, \texttt{latE7} and \texttt{lonE7}.
+
+For a non-negative integer part, the packed value is computed as:
+
+\[
+    \textit{(lon/lat)E7} = \textit{integer} \times 10^7 + \textit{decimal}
+\]
+
+For a negative integer part, the decimal component is subtracted to correctly
+extend the magnitude:
+
+\[
+    \textit{(lon/lat)E7} = \textit{integer} \times 10^7 - \textit{decimal}
+\]
+
+This representation preserves the full signed range of geographic coordinates without requiring any coordinate shifting,
+and fits within a 32-bit signed integer for the valid ranges of both latitude ($[-90\text{°}, +90\text{°}]$) and longitude ($[-180\text{°}, +180\text{°}]$)~\cite{wgs84}.
+
+\subsection{Spatial partitioning}\label{subsec:spatial-partitioning}
+The operational area of the smart contract is modelled as a square region subdivided into a uniform grid of $n \times n$ square chunks, where $n$ denotes the number of chunks per side (\texttt{chunk4Side}).
+Each chunk represents a distinct geographic portion of the territory.
+The origin of the grid is located at the south-west corner of the area; latitude increases northward and longitude increases eastward from the origin.
+At deployment time, the end coordinate is derived by adding the total area extent to both axes of the packed origin:
+
+\[
+    \textit{end} = \textit{origin} + \texttt{chunkSize} \times \texttt{chunk4Side}
+\]
+
+If no spatial subdivision is required, setting $n = 1$ yields a single chunk
+covering the entire operational area, preserving compatibility with deployments
+that do not use the chunking mechanism.
+
+\subsection{Chunk indexing}\label{subsec:chunk-indexing}
+
+Given a \texttt{PackedPosition}, its chunk coordinates are computed as:
+
+\begin{equation}
+    \texttt{row} = \left\lfloor \frac{\textit{lat}_{E7} -
+    \textit{origin.lat}_{E7}}{\texttt{chunkSize}} \right\rfloor, \qquad
+    \texttt{col} = \left\lfloor \frac{\textit{lon}_{E7} -
+    \textit{origin.lon}_{E7}}{\texttt{chunkSize}} \right\rfloor
+    \label{eq:row-col}
+\end{equation}
+
+Since latitude increases northward, row~$0$ corresponds to the southernmost
+strip; since longitude increases eastward, column~$0$ corresponds to the
+westernmost strip.
+Each chunk is then assigned a unique sequential index in the range $[0,\ n^2 - 1]$:
+
+\begin{equation}
+    \textit{chunk\_index} = \texttt{row} \times n + \texttt{col}
+    \label{eq:chunk-index}
+\end{equation}
+Where $n$ is the number is \texttt{chunk4Side}, described in Table~\ref{tab:params-chunks}.
+
+This linear mapping establishes a direct correspondence between the
+two-dimensional grid coordinates and a one-dimensional array, enabling
+constant-time lookup of chunk data from its geographic position.
+A data submission is rejected if the packed coordinates fall outside the bounds
+$[\textit{origin}, \textit{end})$ on either axis.
 
 
 \section{Protocol workflow}\label{sec:proto-workflow}
@@ -359,7 +430,21 @@ This extension eliminates the shared $K_{dec}$ vulnerability: each verifier can 
 However, this comes at the cost of increased workload for \texttt{B}, who must perform one re-encryption cycle per data entry, and additional IPFS storage, as each datum now exists in two encrypted forms.
 
 \subsection{Addressing geographical incentive issue}\label{subsec:addressing-issues-geographical-incentive-issue}
-TODO % TODO
+In Section~\ref{sec:chunking-system} is described the chunking system and in Section~\ref{sec:incentive-mechanisms} all the incentive mechanism to contribute to the \texttt{B}'s campaign, but there is no real incentive to contribute to the acquisition of a chunk instead of another one, with all the risks described in Section~\ref{subsec:security-analysis-issues-unused-geography}.
+The solution to this problem is to introduce a penalty for senders that send data in a chunk that have already a certain number of data.
+\paragraph{Limited data per chunk}
+If $maximumDataPerChunk > 0$ Then the missing data ratio is defined as follows:
+\begin{equation}
+    \alpha = \frac{chunkCount}{maximumDataPerChunk}
+    \label{eq:proto-design-define-alpha-ratio}
+\end{equation}
+Where $maximumDataPerChunk$ is defined in Table~\ref{tab:params-needs} and $chunkCount$ is the current number of data sent within a chunk.
+Reward $r$ is calculated as:
+\begin{equation}
+    r = (1 - \alpha)^{\frac{1}{k}}
+    \label{eq:proto-design-reward-determination}
+\end{equation}
+Where $k$ is defined as VARIABLE_NAME IN TABLE_TODO %TODO
 
 \subsection{Addressing lack of verifier penalties}\label{subsec:addressing-issues-missing-verifier-penalties}
 TODO % TODO
