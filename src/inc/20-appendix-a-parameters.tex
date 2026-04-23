@@ -169,7 +169,7 @@ Bonds are deducted at action time (submission or assignment) rather than at rewa
 The \texttt{GlobalPosition} structure defines the geographic origin (south-west corner) of the campaign area.
 The coordinate representation and the E7 packing mechanism are described in detail in the implementation chapter. \Cref{tab:params-position} lists the fields and their valid ranges.
 
-\begin{table}[H]
+\begin{table}
     \centering
     \caption{Fields of the \texttt{GlobalPosition} structure.}
     \label{tab:params-position}
@@ -197,6 +197,44 @@ The coordinate representation and the E7 packing mechanism are described in deta
         & \texttt{uint32}
         & $[0,\; 9\,999\,999]$
         & Fractional part of the longitude, representing up to seven decimal digits. \\
+        \hline
+    \end{tabular}
+\end{table}
+
+
+\section{Extended Protocol Parameters (\texttt{NovelParameters})}\label{sec:appendix-a-novel-parameters}
+The \texttt{NovelParameters} structure contains the parameters introduced by the protocol extensions described in Section~\ref{sec:addressing-issues}.
+These parameters are accepted at deployment time alongside the base configuration.
+\ref{tab:appendix-a-params-novel} lists each parameter with its type, constraints, and description.
+
+\begin{table}
+    \centering
+    \caption{Parameters of the \texttt{NovelParameters} structure.}
+    \label{tab:appendix-a-params-novel}
+    \small
+    \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
+        \hline
+        \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
+        \hline
+        \texttt{rewardDecayFactor}
+        & \texttt{uint256}
+        & $> 0$
+        & Controls the steepness of the reward decay curve as a chunk approaches saturation.
+        Higher values produce a gentler decay, while lower values penalize contributions to already-populated chunks more aggressively.
+        Used in Equation~\ref{eq:proto-design-reward-determination}. \\[6pt]
+
+        \texttt{kickVerifierAfter\-WrongVotes}
+        & \texttt{uint256}
+        & $\geq 0$ (0 = disabled)
+        & Number of accumulated incorrect votes after which a verifier is automatically removed from the campaign.
+        When set to zero, the automatic removal mechanism is disabled and only manual removal by \texttt{B} is available. \\[6pt]
+
+        \texttt{pardonWrongVote\-AfterRightVotes}
+        & \texttt{uint256}
+        & $\geq 0$ (0 = disabled)
+        & Number of correct votes required to decrease the incorrect vote counter by one.
+        Provides a forgiveness mechanism so that honest verifiers who occasionally make mistakes are not unfairly penalized over the course of a long campaign.
+        When set to zero, incorrect votes are never forgiven. \\
         \hline
     \end{tabular}
 \end{table}
