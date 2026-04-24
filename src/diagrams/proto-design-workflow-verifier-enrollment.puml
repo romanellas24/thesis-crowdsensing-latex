@@ -1,0 +1,31 @@
+@startuml verifier_enrollment
+title Verifier Enrollment Phase
+
+actor "Verifier\n(V)" as V
+participant "Smart Contract\n(SC)" as SC
+actor "Campaign Initiator\n(B)" as B
+
+== Key Generation (off-chain) ==
+
+V -> V : Generate (PK_V, SK_V)
+
+== Enrollment ==
+
+V -> SC : Retrieve PK_B
+SC --> V : PK_B
+
+V -> V : Compute c_1 = Enc(PK_V, PK_B)
+V -> SC : Send c_1
+
+SC -> B : Emit VerifierEnrolledEvent(V, c_1)
+
+B -> B : Compute PK_V = Dec(c_1, SK_B)
+B -> B : Compute c_2 = Enc(K_dec, PK_V)
+
+B -> SC : Send c_2
+
+SC -> V : Emit VerifierDecryptionKeyReady(V, c_2)
+
+V -> V : Compute K_dec = Dec(c_2, SK_V)
+
+@enduml

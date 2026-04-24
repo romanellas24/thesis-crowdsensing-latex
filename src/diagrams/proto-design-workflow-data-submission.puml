@@ -1,0 +1,26 @@
+@startuml data_submission
+title Data Submission Phase
+
+actor "Sender\n(S)" as S
+database "IPFS" as IPFS
+participant "Smart Contract\n(SC)" as SC
+actor "Verifier\n(V)" as V
+
+== Off-chain Operations ==
+
+S -> S : Encrypt data with K_enc
+S -> IPFS : Upload encrypted data
+IPFS --> S : CID
+
+S -> S : Compute CID_ciphered = Enc(CID, K_enc)
+
+== On-chain Submission ==
+
+S -> SC : Send (CID_ciphered, position)
+
+SC -> SC : Validate sender, position,\nchunk and bond constraints
+SC -> SC : Store data entry
+
+SC -> V : Emit DataVerificationRequestedEvent(dataId)
+
+@enduml

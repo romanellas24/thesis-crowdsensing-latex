@@ -1,0 +1,25 @@
+@startuml initialization
+title Initialization Phase
+
+actor "Campaign Initiator\n(B)" as B
+actor "Smart Contract\n(SC)" as SC
+participant "DST Token\n Contract" as DST
+
+== Key Generation (off-chain) ==
+
+B -> B : Generate (PK_B, SK_B)
+B -> B : Generate (K_enc, K_dec)
+
+== Smart Contract Deployment ==
+
+B -> SC ++ : Deploy SC with params:
+return SC deployed
+
+== Initial Supply Deposit ==
+
+B -> DST : Authorize token transfer to SC address
+B -> SC ++ : notifies transfer approved
+SC -> DST : asks for executing the transfer from B to SC
+return Supply settled
+
+@enduml

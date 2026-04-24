@@ -1,0 +1,31 @@
+@startuml sender_enrollment
+title Sender Enrollment Phase
+
+actor "Sender\n(S)" as S
+participant "Smart Contract\n(SC)" as SC
+actor "Campaign Initiator\n(B)" as B
+
+== Key Generation (off-chain) ==
+
+S -> S : Generate (PK_S, SK_S)
+
+== Enrollment ==
+
+S -> SC : Retrieve PK_B
+SC --> S : PK_B
+
+S -> S : Compute c_1 = Enc(PK_S, PK_B)
+S -> SC : Send c_1
+
+SC -> B : Emit SenderEnrolledEvent(S, c_1)
+
+B -> B : Compute PK_S = Dec(c_1, SK_B)
+B -> B : Compute c_2 = Enc(K_enc, PK_S)
+
+B -> SC : Send c_2
+
+SC -> S : Emit SenderEncryptionKeyReady(S, c_2)
+
+S -> S : Compute K_enc = Dec(c_2, SK_S)
+
+@enduml

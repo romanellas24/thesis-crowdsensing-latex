@@ -1,0 +1,31 @@
+@startuml bond_payment
+title Bond Payment Phase
+
+actor "Participant\n(S or V)" as P
+participant "DST Token\nContract" as DST
+participant "Smart Contract\n(SC)" as SC
+
+== Enrollment phase (see Section 2.2.2 / 2.2.3) ==
+
+...
+
+== Bond Payment ==
+
+P -> DST : Authorize bond transfer to SC
+P -> SC : Deposit bond
+SC -> DST : Transfer bond tokens from P
+DST --> SC : Tokens transferred
+SC -> SC : Update participant bond balance
+
+note over P, SC
+  The same flow applies to senders and verifiers,
+  with different bond amounts:
+  ・ Sender: maxDataPerSender × dataSenderBondPerData
+  ・ Verifier: maxDataPerVerifierPerBond × dataVerifierBondPerData
+end note
+
+== Data submission (Section 2.2.4) / Verification (Section 2.2.5) ==
+
+...
+
+@enduml

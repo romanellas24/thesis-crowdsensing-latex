@@ -1,12 +1,492 @@
 \chapter{Protocol design} \label{ch:protocol-design}
-\section{Actors and threat model}\label{sec:actors}
+In this chapter the protocol design is presented.
+The protocol leverages smart contracts and asymmetric encryption to ensure confidentiality and data integrity.
+The protocol adopts a multi-layered encryption approach, performed off-chain, and uses the smart contract as a communication channel for the crowdsensing campaign.
+The key exchange is made to and from the campaign initiator (referred from now as ''\texttt{B}'').
+\texttt{B} uses their private/public key pair for enhancing confidentiality, in this way, only \texttt{B} can access the other actors' public key, namely senders (\texttt{S}) and verifiers (\texttt{V}).
+This approach shares similarities with prior work on asymmetric key exchange mediated by smart contracts~\cite{muth2020smartdhx}, although it differs substantially in both application domain and protocol design.
+
+\section{Actors}\label{sec:actors}
+The protocol involves several actors that are described in the following subsections.
+
 \subsection{Campaign initiator}\label{subsec:campaign-initiator}
+The campaign initiator (\texttt{B}) is the actor interested for collecting data for some reason.
+They define the geographic area where the smart contract works and set the smart contract hyperparameters, all configurable parameters are explained in Appendix~\ref{ch:appendix-a-parameters}.
+In addition, they deposit the reward funds into the smart contract to ensure that funds are available and senders and verifiers can be compensated.
+The details of rewarding model are described in the~\ref{subsec:proto-rewarding-model} subsection.
+
 \subsection{Sender}\label{subsec:sender}
+Senders (hereafter referred to as \("\)\texttt{S}\("\)) are the users who contribute to the crowdsensing campaign by submitting data retrieved from the environment where they are located.
+To contribute, senders, after the joining phase, upload data to IPFS and submit the encrypted CID through the smart contract.
+
 \subsection{Verifier}\label{subsec:verifiers}
+Verifiers (hereafter referred to as \("\)\texttt{V}\("\)) are the users who contribute to the crowdsensing campaign by executing data quality checks and submitting the verification result through smart contract functions.
+To contribute, verifiers listen for events emitted by the smart contract.
+Upon receiving a \texttt{DataVerificationRequestedEvent}, they request verification authorization; if granted, they execute the verification and publish the result.
+
+\subsection{Smart Contract}\label{subsec:smartcontract}
+Smart Contract (hereafter referred to as \("\)\texttt{SC}\("\)) is the actor that mediates the interaction between all other actors.
+In addition, this actor handle the payment model and the bond mechanism, described in Sections ~\ref{subsec:proto-rewarding-model} and ~\ref{subsec:proto-bond-model}.
+The smart contract acts as the sole communication channel between participants, eliminating direct interaction.
+It stores encrypted cryptographic material and data references on-chain, and enforces campaign lifecycle rules such as participation thresholds and automatic closure.
+
+\section{Chunking system}\label{sec:chunking-system}
+A fundamental challenge in implementing spatial crowdsensing on a smart contract is the lack of native floating-point support in the Solidity language~\cite{wood2014ethereum}.
+Since geographic coordinates are inherently expressed as real numbers, a coordinate remapping strategy is required to represent them as integers without loss of precision.
+This section describes the spatial partitioning model adopted by the smart contract and the fixed-point arithmetic used to handle geographic coordinates.
+
+\subsection{Coordinate remapping}\label{subsec:coordinate-remapping}
+Since Solidity does not support floating-point arithmetic natively as stated before, geographic coordinates are transmitted by clients as a
+\texttt{GlobalPosition} struct composed of four fields:
+the integer and decimal parts of latitude, and the integer and decimal parts of longitude,where the decimal component assumes a precision of up to seven digits after the decimal point.
+
+To enable arithmetic operations within the EVM, coordinates are converted into a compact signed integer representation known as E7 format, where one unit
+corresponds to $10^{-7}$ degrees, providing a spatial resolution of approximately $1.1$\,cm.
+The conversion is performed by the \texttt{packCoordinates} function, which produces a \texttt{PackedPosition}
+struct containing two \texttt{int32} fields, \texttt{latE7} and \texttt{lonE7}.
+
+For a non-negative integer part, the packed value is computed as:
+
+\[
+    \textit{(lon/lat)E7} = \textit{integer} \times 10^7 + \textit{decimal}
+\]
+
+For a negative integer part, the decimal component is subtracted to correctly
+extend the magnitude:
+
+\[
+    \textit{(lon/lat)E7} = \textit{integer} \times 10^7 - \textit{decimal}
+\]
+
+This representation preserves the full signed range of geographic coordinates without requiring any coordinate shifting,
+and fits within a 32-bit signed integer for the valid ranges of both latitude ($[-90\text{°}, +90\text{°}]$) and longitude ($[-180\text{°}, +180\text{°}]$)~\cite{wgs84}.
+
+\subsection{Spatial partitioning}\label{subsec:spatial-partitioning}
+The operational area of the smart contract is modelled as a square region subdivided into a uniform grid of $n \times n$ square chunks, where $n$ denotes the number of chunks per side (\texttt{chunk4Side}).
+Each chunk represents a distinct geographic portion of the territory.
+The origin of the grid is located at the south-west corner of the area; latitude increases northward and longitude increases eastward from the origin.
+At deployment time, the end coordinate is derived by adding the total area extent to both axes of the packed origin:
+
+\[
+    \textit{end} = \textit{origin} + \texttt{chunkSize} \times \texttt{chunk4Side}
+\]
+
+If no spatial subdivision is required, setting $n = 1$ yields a single chunk
+covering the entire operational area, preserving compatibility with deployments
+that do not use the chunking mechanism.
+
+\subsection{Chunk indexing}\label{subsec:chunk-indexing}
+
+Given a \texttt{PackedPosition}, its chunk coordinates are computed as:
+
+\begin{equation}
+    \texttt{row} = \left\lfloor \frac{\textit{lat}_{E7} -
+    \textit{origin.lat}_{E7}}{\texttt{chunkSize}} \right\rfloor, \qquad
+    \texttt{col} = \left\lfloor \frac{\textit{lon}_{E7} -
+    \textit{origin.lon}_{E7}}{\texttt{chunkSize}} \right\rfloor
+    \label{eq:row-col}
+\end{equation}
+
+Since latitude increases northward, row~$0$ corresponds to the southernmost
+strip; since longitude increases eastward, column~$0$ corresponds to the
+westernmost strip.
+Each chunk is then assigned a unique sequential index in the range $[0,\ n^2 - 1]$:
+
+\begin{equation}
+    \textit{chunk\_index} = \texttt{row} \times n + \texttt{col}
+    \label{eq:chunk-index}
+\end{equation}
+Where $n$ is the number is \texttt{chunk4Side}, described in Table~\ref{tab:params-chunks}.
+
+This linear mapping establishes a direct correspondence between the
+two-dimensional grid coordinates and a one-dimensional array, enabling
+constant-time lookup of chunk data from its geographic position.
+A data submission is rejected if the packed coordinates fall outside the bounds
+$[\textit{origin}, \textit{end})$ on either axis.
+
+How chunks are numbered, as the latitude varies and as the longitude varies, is shown in Figure~\ref{fig:proto-design-chunk-enumeration}
+\begin{figure}
+    \centering
+    \input{img/chunking-system-enumeration}
+    \caption{Chunk enumeration for a $5 \times 5$ grid (\texttt{chunk4Side} = 5). Index increases row by row from the southwest origin, consistent with the smart contract implementation.}
+    \label{fig:proto-design-chunk-enumeration}
+\end{figure}
+
+
 \section{Protocol workflow}\label{sec:proto-workflow}
+The protocol workflow is described in the following subsections.
+Each phase is illustrated by a corresponding sequence diagram.
+The protocol design follows and extends the work presented in~\cite{bedogni2024crowdsensing}.
+
+For clarity, the following notation is adopted throughout this chapter:
+\begin{itemize}
+    \item $\text{Enc}(m, PK)$: encryption of message $m$ using public key $PK$;
+    \item $\text{Dec}(c, SK)$: decryption of ciphertext $c$ using private key $SK$;
+    \item $(PK_X, SK_X)$: public and private key pair of actor $X$.
+\end{itemize}
+
 \subsection{Initialization}\label{subsec:proto-init}
-\subsection{Enrollment}\label{subsec:proto-enrollment}
+Initialization phase consists of the following steps.
+The campaign initiator (\texttt{B}) deploys the smart contract, indicating all the parameters, described in Appendix~\ref{ch:appendix-a-parameters}.
+Before the deployment, \texttt{B} generates its pair of private/public key $(PK_B, SK_B)$ which is used for sender and verifiers enrollment (explained respectively in Section~\ref{subsec:proto-sender-enrollment} and Section~\ref{subsec:proto-verifier-enrollment}) and generates also an asymmetric key pair $(K_{enc}, K_{dec})$.
+After the deployment, the owner approves the transfer of a \texttt{totalDst}
+quantity of DST (described in~\ref{subsec:data-sent-token}) to the smart contract address,
+and then confirms the deposit.
+All interactions are shown in Figure~\ref{fig:proto-phase-init}
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-initialization-out}
+        \caption{Initialization phase workflow}\label{fig:proto-phase-init}
+    \end{center}\label{fig:proto-phase-init-container}
+\end{figure}
+
+\subsection{Sender enrollment}\label{subsec:proto-sender-enrollment}
+Any sender who wants to contribute to the crowdsensing campaign has to generate a private/public key pair. $(PK_S, SK_S)$
+Subsequently, \texttt{S} retrieves the public key of \texttt{B} from the smart contract.
+Then \texttt{S} computes:
+\[
+    c^{S}_{1} = \text{Enc}(PK_S, PK_B)
+\]
+and sends $c^{S}_{1}$ to the smart contract.
+Upon receiving the ciphertext, the smart contract emits an event that \texttt{B} monitors.
+When \texttt{B} detects the event, it retrieves the sender address and $c^{S}_{1}$from it.
+
+Then \texttt{B} computes:
+\[
+    PK_S = \text{Dec}(c^{S}_{1}, SK_B)
+\]
+At this point, \texttt{B} possesses \texttt{S}'s public key and can establish a secure channel. \texttt{B} computes:
+\[
+    c^{S}_{2} = \text{Enc}(K_{enc}, PK_S)
+\]
+And sends $c^{S}_{2}$ to the smart contract which triggers an event to notify \texttt{S}.
+Finally, \texttt{S} retrieves $c^{S}_{2}$ from the emitted event and computes
+\[
+    K_{enc} = \text{Dec}(c^{S}_{2}, SK_S)
+\]
+This key will be used for CID encryption, as shown in Section~\ref{subsec:proto-datasubmit}.
+All interactions are shown in Figure~\ref{fig:proto-design-workflow-sender-join}
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-sender-enrollment-out}
+        \caption{Sender phase workflow}\label{fig:proto-design-workflow-sender-join}
+    \end{center}\label{fig:proto-design-workflow-sender-join-container}
+\end{figure}
+
+\subsection{Verifier enrollment}\label{subsec:proto-verifier-enrollment}
+Verifiers contribute to crowdsensing campaign by performing data quality checks on the data.
+Any verifier who wants to contribute to the crowdsensing campaign has to generate a private/public key pair $(PK_V, SK_V)$.
+Subsequently, \texttt{V} retrieves the public key of \texttt{B} from the smart contract.
+Then \texttt{V} computes:
+\[
+    c^{V}_{1} = \text{Enc}(PK_V, PK_B)
+\]
+then sends $c^{V}_{1}$ to the smart contract.
+
+Upon receiving the ciphertext, the smart contract emits an event that \texttt{B} monitors.
+When \texttt{B} detects the event, it retrieves the verifier address and $c^{V}_{1}$ from it.
+
+Then \texttt{B} computes:
+\[
+    PK_V = \text{Dec}(c^{V}_{1}, SK_B)
+\]
+At this point, \texttt{B} possesses \texttt{V}'s public key and can establish a secure channel. \texttt{B} computes:
+\[
+    c^{V}_{2} = \text{Enc}(K_{dec}, PK_V)
+\]
+and sends $c^{V}_{2}$ to the smart contract which triggers an event to notify \texttt{V}.
+Finally, \texttt{V} retrieves $c^{V}_{2}$ from the emitted event and computes
+\[
+    K_{dec} = \text{Dec}(c^{V}_{2}, SK_V)
+\]
+This key will be used for CID decryption, as shown in Section~\ref{subsec:proto-verification}.
+All interactions are shown in Figure~\ref{fig:proto-design-workflow-verifier-join}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-out}
+        \caption{Verifier phase workflow}\label{fig:proto-design-workflow-verifier-join}
+    \end{center}\label{fig:proto-design-workflow-verifier-join-container}
+\end{figure}
+
 \subsection{Data submission}\label{subsec:proto-datasubmit}
+Data submission is the main process of the protocol.
+It enables senders to contribute data references to the campaign.
+When \texttt{S} has data for the campaign, it encrypts data with $K_{enc}$ key and uploads the encrypted data to IPFS.
+IPFS returns a Content Identifier (CID, see Section~\ref{subsec:ipfs})
+\[
+    CID_{ciphered} = \text{Enc}(\text{CID}, K_{enc})
+\]
+Then \texttt{S} sends $CID_{ciphered}$ to the smart contract along with the geographic position of the measurement.
+Once the data is registered, a specific event is emitted by the smart contract which is monitored by verifiers.
+This concludes the data submission phase and triggers the verification phase (described in Section ~\ref{subsec:proto-verification}).
+All interactions are shown in Figure~\ref{fig:proto-design-data-submission}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-data-submission-out}
+        \caption{Data submission workflow}\label{fig:proto-design-data-submission}
+    \end{center}\label{fig:proto-design-data-submission-container}
+\end{figure}
+
 \subsection{Verification}\label{subsec:proto-verification}
-\subsection{Data publishing}\label{subsec:proto-data-publish}
-\section{Security analysis and issues}\label{sec:security-analysis-issues}
+The verification phase is performed by verifiers, whose goal is to determine whether a given data entry meets the quality requirements of the campaign.
+To mitigate the risk of a single malicious or faulty verifier, each data entry is independently verified through multiple \textit{verification slots}.
+The number of slots is conFigured to be odd, so that a strict majority decision is always reachable and ties are structurally avoided.
+Slots are not statically assigned: each verifier must explicitly request authorization, and the smart contract elects it to an available slot only if the eligibility and cooldown constraints are satisfied.
+
+A verifier \texttt{V} can request authorization either upon receiving a \texttt{DataVerificationRequestedEvent} or by polling autonomously.
+Please note that the smart contract is not constrained to return the data entry that triggered the event: any pending data entry eligible for verification can be returned.
+
+The authorization request has two possible outcomes:
+\begin{itemize}
+    \item The \texttt{VerifierElected} event is emitted, carrying among its parameters the ciphered CID and the address of the elected verifier;
+    \item The authorization is denied, in which case \texttt{V} must wait before attempting again.
+\end{itemize}
+
+When \texttt{V} is elected, it can proceed with the verification.
+\texttt{V} computes:
+\[
+    CID = \text{Dec}(CID_{ciphered}, K_{dec})
+\]
+\texttt{V} then retrieves the encrypted data from IPFS using the $CID$ and performs quality checks on it.
+After the checks, \texttt{V} submits the verification result to the smart contract.
+
+As soon as a strict majority of slots agrees on a result (either positive or negative), the smart contract flags the data entry as \texttt{VALID} or \texttt{INVALID}, and the verification process concludes.
+Any remaining unfilled slots are no longer needed and are effectively discarded.
+If \texttt{V} cannot complete the task or misses the deadline, it can submit the special result \texttt{CANNOT\_COMPLETE}; in this case, the verification slot is released and becomes available for reassignment.
+Once the data entry is flagged, payments and penalties are applied, as described in Section~\ref{sec:incentive-mechanisms}.
+All interactions are shown in Figure~\ref{fig:proto-design-verification}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verification-out}
+        \caption{Verification process workflow}\label{fig:proto-design-verification}
+    \end{center}\label{fig:proto-design-verification-container}
+\end{figure}
+
+The full data lifecycle is shown in Figure~\ref{fig:proto-design-datum-lifecycle}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/protocol-datum-lifecycle-out}
+        \caption{Life cycle of a single data entry}\label{fig:proto-design-datum-lifecycle}
+    \end{center}\label{fig:proto-design-datum-lifecycle-container}
+\end{figure}
+
+\section{Incentive mechanisms}\label{sec:incentive-mechanisms}
+The incentive mechanism consists of two different approaches: rewarding actors to encourage honest behaviour and penalizing actors discouraging dishonest behaviours.
+These approaches are enforced through a rewarding system (Section~\ref{subsec:proto-rewarding-model}) and a bond system (Section~\ref{subsec:proto-bond-model}).
+
+\subsection{Data Sent Token (DST)}\label{subsec:data-sent-token}
+Data Sent Token (DST) is a custom ERC-20~\cite{eip20} token used to incentivize participation in the campaign, following the approach of reward-based crowdsensing incentive schemes such as~\cite{ying2025chaser}.
+
+\subsection{Rewarding system}\label{subsec:proto-rewarding-model}
+The rewarding system is  configurable by \texttt{B}.
+The working process is quite straightforward: when a data entry is flagged as \texttt{VALID} or \texttt{INVALID} the rewarding process is triggered:
+\begin{enumerate}
+    \item If the data is \texttt{VALID}, the smart contract rewards \texttt{S} with the conFigured payout. If the data is \texttt{INVALID}, \texttt{S} receives no payout.
+    \item Verifiers, on the other hand, are rewarded conditionally: only verifiers who voted according to the final verification result receive the conFigured payout. Verifiers who submitted a contradicting vote receive no reward.
+\end{enumerate}
+
+\subsection{Bond system}\label{subsec:proto-bond-model}
+A bond is a refundable collateral, denominated in DST tokens, that senders and verifiers must deposit before contributing to the campaign.
+It serves as a commitment device: honest behaviour results in the bond being returned, while invalid contributions or incorrect verifications lead to its forfeit.
+
+The bond system, like the rewarding one, is fully configurable by \texttt{B}, and operates alongside the rewarding system (Section~\ref{subsec:proto-rewarding-model}).
+Bond tokens are refunded together with the associated reward, in order to minimize the number of transactions and the overall gas cost.
+Conversely, when a data entry is flagged as \texttt{INVALID}, the sender's bond is forfeited; similarly, verifiers whose vote contradicts the final verification result forfeit their bond.
+
+The bond mechanism differs between senders and verifiers.
+Verifiers deposit a bond equal to \texttt{maxDataPerVerifierPerBond} $\times$ \texttt{dataVerifierBondPerData}, which covers multiple verifications; when the bond is insufficient, the transaction is reverted and the verifier can top it up and retry.
+Senders, on the other hand, are required to deposit \texttt{maxDataPerSender} $\times$ \texttt{dataSenderBondPerData} upfront.
+Since the bond decreases by \texttt{dataSenderBondPerData} for every submission and cannot be topped up, it effectively caps the number of contributions a sender can make per campaign.
+
+For this reason, the bond payment constitutes an intermediate phase between enrollment and data submission.
+Bond payment is located in the complete workflow as shown in Figure~\ref{fig:proto-design-pay-bond}.
+All parameters shown in this section are explained in Table~\ref{tab:params-needs}
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-bond-payment-out}
+        \caption{Paying bond workflow}\label{fig:proto-design-pay-bond}
+    \end{center}\label{fig:proto-design-pay-bond-container}
+\end{figure}
+
+The full campaign lifecycle is shown in Figure~\ref{fig:proto-design-campaign-lifecycle}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/protocol-campaign-lifecycle-out}
+        \caption{Campaign lifecycle}\label{fig:proto-design-campaign-lifecycle}
+    \end{center}\label{fig:proto-design-campaign-lifecycle-container}
+\end{figure}
+
+\section{Security analysis and other issues}\label{sec:security-analysis-issues}
+In this section the security properties of the protocol are analyzed and known limitations are discussed.
+The following sections discuss how to address the exposed issues and limitations of this protocol, or their extension.
+
+\subsection{Formal verification (ProVerif)}\label{subsec:security-analysis-issues-proverif}
+The presented protocol has been formally verified using ProVerif and is secure under the Dolev-Yao threat model~\cite{dolev1983security, blanchet2001proverif} if all the actors behave honestly:
+an external adversary $\mathcal{A}$ cannot recover the plaintext $CID$ from $CID_{ciphered}$ and cannot decrypt the data stored on IPFS.
+Modeling and execution are described in the Appendix~\ref{ch:appendix-b-proverif-v1-honest}.
+
+\subsection{Malicious verifier attack}\label{subsec:security-analysis-issues-verifier-attack}
+In the current protocol, the adversary $\mathcal{A}$ can join as a verifier and if the campaign initiator $B$ accepts them as a verifier, then $\mathcal{A}$ is able to read all the data transmitted, regardless of which verifier is elected for a specific data entry.
+This follows from the public visibility of $CID_{ciphered}$ values on the blockchain and the shared $K_{dec}$ among all enrolled verifiers.
+Since all transactions are publicly visible on the blockchain, $\mathcal{A}$ can observe every $CID_{ciphered}$ submitted by any sender and can decrypt $CID_{ciphered}$ and the corresponding data using $K_{dec}$.
+This issue requires that the senders must trust not only the campaign initiator, but also every enrolled verifier.
+The attack is shown in Figure~\ref{fig:proto-design-malicious-verifier-attack}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-malicious-verifier-attack-out}
+        \caption{Malicious verifier attack in action}\label{fig:proto-design-malicious-verifier-attack}
+    \end{center}\label{fig:proto-design-malicious-verifier-attack-container}
+\end{figure}
+
+\subsection{Geographic incentive imbalance}\label{subsec:security-analysis-issues-unused-geography}
+The proposed protocol introduces a coordinate system and uses it to partition collected data into geographic chunks.
+Consider the following scenario: \texttt{B} starts a campaign in an area where some chunks cover urban zones and others cover rural ones.
+Since urban areas have significantly more inhabitants than rural ones, it is reasonable to assume that data submissions concentrate in chunks covering cities.
+In the current protocol, the rewarding system offers no additional incentive to collect data in less populated areas.
+Furthermore, the privacy of senders in rural areas is more at risk due to lower population density, as fewer submissions per chunk make individual contributions easier to identify,
+a concern consistent with the broader spatio-temporal privacy risks in MCS~\cite{montori2023privacy}.
+The current protocol does not differentiate incentives by geographic density, leaving rural coverage and the associated privacy risk unaddressed.
+A possible extension could introduce density-aware reward multipliers, encouraging submissions in underrepresented chunks while discouraging over-contribution in saturated ones.
+
+\subsection{Centrality of B}\label{subsec:security-analysis-issues-centrality-b}
+The centrality of the campaign initiator can be considered a threat to the protocol, but it is also essential to its design: \texttt{B} funds the campaign by paying for data collection and the verification process.
+\texttt{B} has a direct economic interest in behaving honestly; moreover, the \texttt{totalDst} amount (described in Table~\ref{tab:params-rewards}) is locked in the smart contract and cannot be withdrawn by \texttt{B}.
+However, if \texttt{B}'s private key $SK_B$ is compromised, an adversary gains the ability to decrypt all actors' public keys and forge key deliveries, compromising the entire campaign.
+Distributing \texttt{B}'s role through techniques such as threshold cryptography~\cite{shamir1979share} or multi-party key generation could mitigate this risk and is left as a possible future extension.
+
+\subsection{Address linkability}\label{subsec:security-analysis-issues-address-linkability}
+Senders interact with the smart contract through a single account and cannot change their address throughout the campaign.
+As a consequence, all submissions from the same sender are linkable: an observer can count the number of data entries a specific address has submitted and infer activity patterns.
+If a sender reaches the \texttt{maxDataPerSender} limit (described in Table~\ref{tab:params-needs}) and wishes to continue contributing, they must create a new account and deposit the bond again.
+The transfer of DST should be made with privacy-first currencies in DEX swappers for unlink the new account to the old one~\cite{montori2023privacy}.
+If the sender behaved honestly during the first submissions, the bond is fully refunded and can be reused for the new account.
+This trade-off was accepted deliberately: using a single address simplifies bond accounting and enables the \texttt{maxDataPerSender} cap, at the cost of submission linkability.
+
+\subsection{Verifier penalties}\label{subsec:security-analysis-verifiers-no-penalties}
+In the current protocol, the only penalty a verifier faces for incorrect behaviour is the loss of the deposited bond, which may be insufficient to deter sustained malicious activity.
+A possible improvement would introduce a reputation mechanism: past incorrect verifications should be recorded and forgiven only after $n$ subsequent correct verifications, or the verifier should be removed after $m$ accumulated incorrect verifications.
+This ensures, on the one hand, that the verifier maintains honest behaviour over time, and, on the other, that occasional mistakes do not lead to immediate removal.
+
+Furthermore, a verification slot manipulation attack is possible.
+Since all verification results are publicly visible on the blockchain, an elected verifier can delay its
+submission and observe the votes of other verifiers.
+Once the majority outcome becomes apparent, the verifier submits a vote
+aligned with the majority just before the timeout, guaranteeing
+the reward without performing any actual data validation.
+
+A robust solution would require a commit-reveal scheme~\cite{brassard1983commitreveal, eip1011}, where verifiers first commit a hash of their vote and later reveal the actual result.
+This would prevent verifiers from observing others' votes before submitting their own.
+However, implementing commit-reveal on-chain introduces additional gas costs and protocol complexity, and is left as a future extension.
+
+\subsection{Sybil attack}\label{subsec:security-analysis-verifier-sybil}
+In the context of decentralized protocols, a Sybil attack occurs when a single adversary creates multiple identities to gain disproportionate influence over the system~\cite{douceur2002sybil}.
+In this protocol, a Sybil attack targets the verifier role: an adversary could create enough identities to control multiple verification slots,with two possible goals: accessing all campaign data without legitimate
+participation, or accumulating a majority of slots to drain rewards by forcing arbitrary verification outcomes.
+
+The Sybil attack is partially mitigated by two mechanisms:
+\begin{itemize}
+    \item \textbf{Economic barrier}: each verifier identity must deposit
+    a bond of \newline $n \times \texttt{dataVerifierBondPerData} \times
+    \texttt{maxDataPerVerifierPerBond}$ DST, raising the cost of
+    the attack proportionally to the number of identities created~\cite{chatzopoulos2018privacy, ying2025chaser};
+    \item \textbf{Enrollment control}: all verifiers must be accepted
+    by \texttt{B} during enrollment, providing an off-chain vetting
+    opportunity.
+\end{itemize}
+
+However, these defenses may be insufficient against a well-funded adversary (e.g., a state actor) for whom the bond cost is negligible.
+In such a scenario, the primary defense remains \texttt{B}'s ability to vet verifier enrollment requests through off-chain identity verification mechanisms.
+
+\section{Addressing issues}\label{sec:addressing-issues}
+In this section some solution at design-level are proposed to solve the issues described in
+Section~\ref{subsec:security-analysis-issues-verifier-attack},
+Section~\ref{subsec:security-analysis-issues-unused-geography}
+and Section~\ref{subsec:security-analysis-verifiers-no-penalties}.
+
+\subsection{Addressing trusted verifier issue}\label{subsec:addressing-issues-trusted-verifier-issue}
+From the sender's perspective, the proposed protocol requires trusting not  only \texttt{B} but all current and future verifiers.
+This represents a strong discouragement for senders, as their data can be accessed by any enrolled verifier through the public blockchain, particularly if \texttt{B} accepts a malicious verifier.
+This issue can be addressed by modifying the verifier enrollment logic, as shown in Figure~\ref{fig:proto-data-enrollment-verification-novel}, and the data submission phase, as shown in Figure~\ref{fig:proto-data-submission-verification-workflow}.
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-novel-out}
+        \caption{Novel verifier enrollment phase}\label{fig:proto-data-enrollment-verification-novel}
+    \end{center}\label{fig:proto-data-enrollment-verification-novel-container}
+\end{figure}
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-data-submission-novel-out}
+        \caption{Data submission and novel verification workflow}\label{fig:proto-data-submission-verification-workflow}
+    \end{center}\label{fig:proto-data-submission-verification-workflow-container}
+\end{figure}
+
+The idea is straightforward: during verifier enrollment, \texttt{B} retains the  public key of every verifier locally.
+When a datum is submitted, \texttt{B} is notified through an event and generates a unique asymmetric key pair $(KD_{enc}, KD_{dec})$ for that data entry.
+Subsequently, \texttt{B} decrypts $CID_{ciphered}$ using $K_{dec}$ to obtain the original $CID$, retrieves the  encrypted data from IPFS, and decrypts it using $K_{dec}$.
+\texttt{B} then  re-encrypts the data using $KD_{enc}$ and uploads it to IPFS, obtaining a new  content identifier $CID_V$.
+\texttt{B} concludes this step by notifying the smart contract that the per-datum key material is ready.
+
+Once the smart contract is informed by \texttt{B}, it emits an event that verifiers monitor; upon receiving it, they can request verification authorization.
+When a verifier is elected to a slot, the smart contract notifies \texttt{B}, who constructs a \texttt{verification\_bundle} containing $CID_V$ and $KD_{dec}$, encrypted using the elected verifier's public key $PK_V$.
+Finally, \texttt{B} delivers the bundle to the smart contract, which emits an event notifying the elected verifier.
+
+This extension eliminates the shared $K_{dec}$ vulnerability: each verifier can only access data entries for which it has been specifically elected.
+However, this comes at the cost of increased workload for \texttt{B}, who must perform one re-encryption cycle per data entry, and additional IPFS storage, as each datum now exists in two encrypted forms.
+
+\subsection{Addressing geographical incentive issue}\label{subsec:addressing-issues-geographical-incentive-issue}
+Section~\ref{sec:chunking-system} describes the chunking system and Section~\ref{sec:incentive-mechanisms} presents the incentive mechanisms to contribute to the campaign, but there is no incentive to contribute data to one chunk over another, with all the risks described in Section~\ref{subsec:security-analysis-issues-unused-geography}.
+The solution is to introduce a reward decay function that reduces the payout as a chunk approaches saturation, encouraging senders to target underrepresented areas.
+
+\paragraph{Limited data per chunk}
+If $\texttt{maximumDataPerChunk} > 0$, the saturation ratio is defined as follows:
+\begin{equation}
+    \alpha = \frac{\texttt{chunkCount}}{\texttt{maximumDataPerChunk}}
+    \label{eq:proto-design-define-alpha-ratio}
+\end{equation}
+where $\texttt{maximumDataPerChunk}$ is defined in Table~\ref{tab:params-needs} and $\texttt{chunkCount}$ is the current number of data entries submitted within a chunk.
+The reward $r$ is then calculated as:
+\begin{equation}
+    r = \texttt{dataSenderPayout} \cdot (1 - \alpha)^{\frac{1}{2^{k}}}
+    \label{eq:proto-design-reward-determination}
+\end{equation}
+where $\texttt{dataSenderPayout}$ is defined in Table~\ref{tab:params-rewards} and $k$ is the \texttt{rewardDecayFactor} as defined in Table~\ref{tab:appendix-a-params-novel}.
+
+The parameter $k$ controls the decay rate: higher values of $k$ result in a gentler decay, allowing more submissions before the reward drops significantly, while lower values produce a steeper curve that penalizes contributions to already-populated chunks more aggressively.
+When $\alpha = 1$, the chunk is saturated and no further submissions are accepted; this is enforced by a constraint in the smart contract.
+
+If $\texttt{maximumDataPerChunk} = 0$, no per-chunk limit is enforced and the full reward is granted for every submission.
+
+An example of the reward decay curve for different values of $k$ is shown in Figure~\ref{fig:reward-decay-curve}.
+
+
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.75\textwidth]{img/reward-decay-curve}
+        \caption{Reward decay as a function of chunk saturation ratio $\alpha$ for different values of $k$}\label{fig:reward-decay-curve}
+    \end{center}\label{fig:reward-decay-curve-container}
+\end{figure}
+
+\subsection{Addressing lack of verifier penalties}\label{subsec:addressing-issues-missing-verifier-penalties}
+In the current protocol, verifiers whose submissions are incorrect only lose their \texttt{dataVerifierBondPerData}.
+However, this may not be sufficient to discourage sustained malicious behaviour over multiple verification cycles.
+
+This issue can be addressed by introducing two mechanisms: an automatic removal system that tracks incorrect votes, and the ability for \texttt{B} to manually remove a verifier from the campaign.
+Two additional parameters are introduced:
+\begin{itemize}
+    \item \texttt{kickVerifierAfterWrongVotes}: number of accumulated incorrect votes after which a verifier is automatically removed from the campaign;
+    \item \texttt{pardonWrongVoteAfterRightVotes}: number of correct votes required to decrease the incorrect vote counter by one.
+\end{itemize}
+
+The forgiveness mechanism ensures that honest verifiers who occasionally make mistakes are not unfairly penalized over the course of a long campaign.
+When a verifier is removed, either automatically or by \texttt{B}, the remaining bond balance is returned to the verifier.
+This design choice reflects the fact that removal itself is already a significant penalty, as the verifier loses access to all future rewards from the campaign.
+
+Note that this mechanism does not address the slot manipulation attack described in Section~\ref{subsec:security-analysis-verifiers-no-penalties}, where a verifier deliberately delays submission to observe others' votes before responding.
+Since the adversary's votes are aligned with the majority, they are not counted as incorrect and the automatic removal is never triggered.
+Addressing this attack would require a commit-reveal scheme, which is left as a future extension.
+
+All the solutions proposed in this section are implemented in an extended version of the smart contract, described in Chapter~\ref{ch:implementation}.
