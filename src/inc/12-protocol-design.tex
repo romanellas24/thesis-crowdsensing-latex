@@ -104,7 +104,13 @@ constant-time lookup of chunk data from its geographic position.
 A data submission is rejected if the packed coordinates fall outside the bounds
 $[\textit{origin}, \textit{end})$ on either axis.
 
-% TODO: insert a chunking division area image example
+How chunks are numbered, as the latitude varies and as the longitude varies, is shown in Figure~\ref{fig:proto-design-chunk-enumeration}
+\begin{figure}
+    \centering
+    \input{img/chunking-system-enumeration}
+    \caption{Chunk enumeration for a $5 \times 5$ grid (\texttt{chunk4Side} = 5). Index increases row by row from the southwest origin, consistent with the smart contract implementation.}
+    \label{fig:proto-design-chunk-enumeration}
+\end{figure}
 
 
 \section{Protocol workflow}\label{sec:proto-workflow}
