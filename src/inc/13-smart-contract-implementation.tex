@@ -10,8 +10,18 @@ because a lot of actions are not executable on the blockchain, like IPFS upload/
 usage are not permitted on smart contacts due to the non-deterministic nature of operations such as encryption~\cite{wood2014ethereum}.
 The off-chain operations are encapsulated in a SDK that allows actors to interact with the protocol without dealing directly with blockchain primitives.
 The structure is composed by two contracts: the base protocol inspired to~\cite{bedogni2024crowdsensing} and another one that extends the base protocol with the mechanisms proposed in Section~\ref{sec:addressing-issues}.
+
 \subsection{Contract hierarchy}\label{subsec:implementation-contract-hierarchy}
-Continuare qui
+The \texttt{PrivacySecondContract} extends \texttt{PrivacyFirstContract}, reusing its core logic without modification.
+The functionalities not covered by Section~\ref{sec:addressing-issues}, such as sender enrollment, bond system, majority consensus, and lifecycle are inherited without modification.
+An overview of functions and more representative fields are shown in Figure~\ref{fig:proto-implementation-contract-hierarchy}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.50\textwidth]{diagrams/proto-implementation-contract-hierarchy-out}
+        \caption{Class hierarchy of the two smart contracts}\label{fig:proto-implementation-contract-hierarchy}
+    \end{center}\label{fig:proto-implementation-contract-hierarchy-container}
+\end{figure}
+
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
 TO BE EVALUATED
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
