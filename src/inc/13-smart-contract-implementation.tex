@@ -1,6 +1,17 @@
 \chapter{Smart contract implementation}\label{ch:implementation}
+In the previous chapter the protocol was explained, some issues are identified, and mitigation strategies are proposed for the most critical ones.
+This chapter describes how the entire protocol is implemented.
+The development environment is made of Solidity on Ethereum~\cite{ethereum} and Hardhat as the development and testing framework.
+In addition, the chapter also describes how \texttt{PrivacyFirstContract} and its extension, \texttt{PrivacySecondContract} interacts and which functions are overridden and the motivation behind every choice.
+
 \section{Architecture}\label{sec:implementation-architecture}
+The architecture is divided between on-chain operations and off chain ones, this distinction exists
+because a lot of actions are not executable on the blockchain, like IPFS upload/download and ciphers
+usage are not permitted on smart contacts due to the non-deterministic nature of operations such as encryption~\cite{wood2014ethereum}.
+The off-chain operations are encapsulated in a SDK that allows actors to interact with the protocol without dealing directly with blockchain primitives.
+The structure is composed by two contracts: the base protocol inspired to~\cite{bedogni2024crowdsensing} and another one that extends the base protocol with the mechanisms proposed in Section~\ref{sec:addressing-issues}.
 \subsection{Contract hierarchy}\label{subsec:implementation-contract-hierarchy}
+Continuare qui
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
 TO BE EVALUATED
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
