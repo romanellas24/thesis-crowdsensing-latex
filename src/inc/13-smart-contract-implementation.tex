@@ -22,6 +22,17 @@ An overview of functions and more representative fields are shown in Figure~\ref
     \end{center}\label{fig:proto-implementation-contract-hierarchy-container}
 \end{figure}
 
+There are four \texttt{internal} functions that have been overridden in the \texttt{PrivacySecondContract} to adapt them to the contract needs.
+
+
+% - START REVIEW % TODO: CONTINUE HERE
+Since the extended contract needs to delivery verification bundles, to prevent double sending, a \texttt{_bundleDelivered} mapping is introduced.
+For this reason, once the bundle is sent
+% TODO: CONTINUE HERE
+The function \tetxtt{_emitVerifierElected} is modified in the extended contract to delete the bundle delivery receipt
+% - END REVIEW % TODO: CONTINUE HERE
+
+
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
 TO BE EVALUATED
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
