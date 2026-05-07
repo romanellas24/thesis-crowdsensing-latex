@@ -39,13 +39,59 @@ To address this issue, is required to modify how the smart contract collects the
 For this reason, the functions \texttt{\_rewardCorrectVerifiers} and \texttt{\_tryRewardVerifier} are modified and the responses are saved in mappings that keeps the count of correct votes and wrong ones.
 These mappings are required to enforce the kick of systematically wrong voters, as proposed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
 
-The \texttt{PrivacySecondContract} overrides also public functions; the function used to publish decryption key (\texttt{publishVerifierDecryptionKey}) in the \texttt{PrivacyFirstContract} publish the decryption key via \texttt{VerifierEnrolled} which is common among all the verifiers.
-In the novel contract, the function is overridden and publish the same event without the key, because, in order to delete a unique key between all the users, like described in~\ref{subsec:addressing-issues-trusted-verifier-issue}.
-For these reasons, the function \texttt{publishIpfsCid}, is overridden and instead of adding the data in the pending data structure, data requires that \texttt{B} generates a per-data key pair ($KD_{enc}$, $KD_{dec}$), in addition, \texttt{B} calls \texttt{notifyVerificationKeyReady} and the smart contract adds the data to pending data structure.
-With the novel event \texttt{VerifierElectedForData}, the smart contract communicates that a verifier is elected and \texttt{B} provides a verification bundle for them, using \texttt{deliverVerificationBundle}.
+The \texttt{PrivacySecondContract} overrides also public functions; the function used to publish decryption key (\texttt{publishVerifierDecryptionKey}) in the \texttt{PrivacyFirstContract} publishes the decryption key through the VerifierEnrolled event, using a key shared among all enrolled verifiers.
+In the novel contract, the function is overridden and publish the same event without the key, because, in order to avoid a single decryption key shared among all the verifiers, like described in~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+For these reasons, the function \texttt{publishIpfsCid}, is overridden and instead of adding the data in the pending data structure, the data entry requires that \texttt{B} to generate a per-data key pair ($KD_{enc}$, $KD_{dec}$), after which, \texttt{B} calls \texttt{notifyVerificationKeyReady} and the smart contract adds the data to pending data structure.
+The novel event \texttt{VerifierElectedForData} notifies \texttt{B} that a verifier has been elected, upon which \texttt{B} delivers a verification bundle via \texttt{deliverVerificationBundle}.
 Then a \texttt{VerifierVerificationBundleReady} is emitted and the verifier can finally calculate and submit the verification result using \texttt{submitVerifyResult} overridden function that checks the verification bundle delivery.
 
-In addition, two new functions are introduced: \texttt{getExpectedSenderReward} and \texttt{kickVerifier}, the first one useful
+In addition, two new functions are introduced: \texttt{getExpectedSenderReward} and \texttt{kickVerifier}, the first one is informative and useful for users to understand which payout they will receive if they send data for a specific chunk in that moment.
+The second one can be used from by campaign initiator \texttt{B} to exclude a verifier from the crowdsensing campaign.
+In this case the verifier's bond is returned, as the exclusion from the campaign already constitutes a sufficient penalty, consistently with the design choice described in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+
+A description of all overridden functions between the contracts is shown in Table~\ref{tab:contract-implementation-hierarchy-overrides}
+
+\begin{table}
+    \centering
+    \begin{tabular}{|p{4cm}|p{3.5cm}|p{3.5cm}|p{2.5cm}|}
+        \hline
+        \textbf{Function} & \textbf{PFC} & \textbf{PSC} & \textbf{Reason} \\
+        \hline
+        {\texttt{publishVerifier-\newline DecryptionKey}}
+        & Publishes decryption key on-chain via \texttt{VerifierEnrolled}
+        & Emits \texttt{VerifierEnrolled} without key; key is generated off-chain
+        & Trusted verifier flow (\ref{subsec:addressing-issues-trusted-verifier-issue}) \\
+        \hline
+        \texttt{publishIpfsCid}
+        & Adds data to pending; reward is fixed base payout
+        & Stores data awaiting key generation; computes decayed reward
+        & Trusted verifier flow and reward decay (\ref{subsec:addressing-issues-trusted-verifier-issue},~\ref{subsec:addressing-issues-geographical-incentive-issue}) \\
+        \hline
+        \texttt{submitVerifyResult}
+        & No prerequisite on bundle delivery
+        & Requires \texttt{deliver-\newline Verification-\newline Bundle} to be called first
+        & Trusted verifier flow (\ref{subsec:addressing-issues-trusted-verifier-issue}) \\
+        \hline
+        \texttt{\_emitVerifier-\newline Elected}
+        & Emits election event and assigns slot
+        & Additionally resets \texttt{\_bundle-\newline Delivered} flag
+        & Allows bundle re-delivery on slot reassignment \\
+        \hline
+        \texttt{\_rewardSender}
+        & Pays fixed base payout
+        & Reads pre-computed reward from \newline \texttt{\_computedSender-\newline Reward}
+        & Reward decay (\ref{subsec:addressing-issues-geographical-incentive-issue}) \\
+        \hline
+        \texttt{\_rewardCorrect-\newline Verifiers} \newline \texttt{\_tryRewardVerifier}
+        & Distributes rewards based on majority
+        & Additionally records correct and wrong votes per verifier
+        & Verifier penalties (\ref{subsec:addressing-issues-missing-verifier-penalties}) \\
+        \hline
+    \end{tabular}
+    \caption{Overridden functions between \texttt{PrivacyFirstContract} (PFC) and \texttt{PrivacySecondContract} (PSC)}
+    \label{tab:contract-implementation-hierarchy-overrides}
+\end{table}
+
 
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
 TO BE EVALUATED
