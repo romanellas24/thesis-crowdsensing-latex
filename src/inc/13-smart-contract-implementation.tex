@@ -32,12 +32,20 @@ Since in the Section~\ref{subsec:addressing-issues-geographical-incentive-issue}
 For this reason, the method \texttt{\_rewardSender} is overridden and the only modification made is change the calculation of total payout.
 In the first version of the contract, the reward is always the full base payout, in the novel one, the contract reads the pre-computed reward from storage.
 The effective payout is calculated at the CID publish time, the contract execute the calculus in the \texttt{\_computeDecayedReward} function.
-That function executes $k$ times the sqrt of a value (as shown in equation~\ref{eq:proto-design-reward-determination}), in \textit{O(log n)} time using the babylonian method, to execute this operation, all values are scaled by a factor of \texttt{1E18} since the EVM, as noted in Section~\ref{sec:chunking-system}, is unable to execute floating point calculus.
+That function executes $k$ times the sqrt of a value (as shown in equation~\ref{eq:proto-design-reward-determination}), in \textit{O(log n)} time using the babylonian method~\cite{kosheleva2009babylonian}, to execute this operation, all values are scaled by a factor of \texttt{1E18} since the EVM, as noted in Section~\ref{sec:chunking-system}, is unable to execute floating point calculus.
 
 The problem of missing verifiers penalties, in addition to bond loss, is discussed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
 To address this issue, is required to modify how the smart contract collects the verifiers responses.
 For this reason, the functions \texttt{\_rewardCorrectVerifiers} and \texttt{\_tryRewardVerifier} are modified and the responses are saved in mappings that keeps the count of correct votes and wrong ones.
 These mappings are required to enforce the kick of systematically wrong voters, as proposed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+
+The \texttt{PrivacySecondContract} overrides also public functions; the function used to publish decryption key (\texttt{publishVerifierDecryptionKey}) in the \texttt{PrivacyFirstContract} publish the decryption key via \texttt{VerifierEnrolled} which is common among all the verifiers.
+In the novel contract, the function is overridden and publish the same event without the key, because, in order to delete a unique key between all the users, like described in~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+For these reasons, the function \texttt{publishIpfsCid}, is overridden and instead of adding the data in the pending data structure, data requires that \texttt{B} generates a per-data key pair ($KD_{enc}$, $KD_{dec}$), in addition, \texttt{B} calls \texttt{notifyVerificationKeyReady} and the smart contract adds the data to pending data structure.
+With the novel event \texttt{VerifierElectedForData}, the smart contract communicates that a verifier is elected and \texttt{B} provides a verification bundle for them, using \texttt{deliverVerificationBundle}.
+Then a \texttt{VerifierVerificationBundleReady} is emitted and the verifier can finally calculate and submit the verification result using \texttt{submitVerifyResult} overridden function that checks the verification bundle delivery.
+
+In addition, two new functions are introduced: \texttt{getExpectedSenderReward} and \texttt{kickVerifier}, the first one useful
 
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
 TO BE EVALUATED
