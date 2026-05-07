@@ -24,14 +24,20 @@ An overview of functions and more representative fields are shown in Figure~\ref
 
 There are four \texttt{internal} functions that have been overridden in the \texttt{PrivacySecondContract} to adapt them to the contract needs.
 
+Since the extended contract needs to delivery verification bundles, to prevent duplicate delivery, a \texttt{\_bundleDelivered} mapping is introduced.
+For this reason, once the bundle is sent the function \texttt{\_emitVerifierElected} is overridden in \texttt{PrivacySecondContract} to reset the delivery state, allowing a new bundle to be delivered if the verifier slot is reassigned.
+This allows the usage of the same location of memory, the delivery of verification bundles is required in order to address the issue of verifiers trust, described in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
 
-% - START REVIEW % TODO: CONTINUE HERE
-Since the extended contract needs to delivery verification bundles, to prevent double sending, a \texttt{_bundleDelivered} mapping is introduced.
-For this reason, once the bundle is sent
-% TODO: CONTINUE HERE
-The function \tetxtt{_emitVerifierElected} is modified in the extended contract to delete the bundle delivery receipt
-% - END REVIEW % TODO: CONTINUE HERE
+Since in the Section~\ref{subsec:addressing-issues-geographical-incentive-issue} is described a mechanism to incentive data sensing in heterogeneous geographical areas, it is necessary to change the rewarding system.
+For this reason, the method \texttt{\_rewardSender} is overridden and the only modification made is change the calculation of total payout.
+In the first version of the contract, the reward is always the full base payout, in the novel one, the contract reads the pre-computed reward from storage.
+The effective payout is calculated at the CID publish time, the contract execute the calculus in the \texttt{\_computeDecayedReward} function.
+That function executes $k$ times the sqrt of a value (as shown in equation~\ref{eq:proto-design-reward-determination}), in \textit{O(log n)} time using the babylonian method, to execute this operation, all values are scaled by a factor of \texttt{1E18} since the EVM, as noted in Section~\ref{sec:chunking-system}, is unable to execute floating point calculus.
 
+The problem of missing verifiers penalties, in addition to bond loss, is discussed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+To address this issue, is required to modify how the smart contract collects the verifiers responses.
+For this reason, the functions \texttt{\_rewardCorrectVerifiers} and \texttt{\_tryRewardVerifier} are modified and the responses are saved in mappings that keeps the count of correct votes and wrong ones.
+These mappings are required to enforce the kick of systematically wrong voters, as proposed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
 
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
 TO BE EVALUATED
