@@ -117,18 +117,18 @@ The UML class diagram of the SDK layer is shown in Figure~\ref{fig:proto-impleme
     \end{center}\label{fig:proto-implementation-sdk-container}
 \end{figure}
 
-In the Protocol there are, as before, three types of actors, described in Section~\ref{sec:actors}.
-In the SDK architecture, there are three classes, once for type of Actor.
+In the protocol there are, as before, three types of actors, described in Section~\ref{sec:actors}.
+In the SDK architecture, there are three classes, once for each type of Actor.
 
-The campaign initiator \texttt{B} classes are \texttt{OwnerPrivacyFirst} and \texttt{OwnerPrivacySecond}, respectively for the first and the second version of the protocol.
-Using the class SDK, \texttt{B} can, using the \lstinline{OwnerPrivacyFirst::setup} method pay initial supply and register all the listeners using \lstinline{OwnerPrivacyFirst::startListening}.
-For the \texttt{OwnerPrivacySecond} contract, the method \lstinline{startListening} is overridden enabling the listeners registration for novel events.
-With auto-listeners \texttt{B} is able to handle enrollments automatically.
+The campaign initiator \texttt{B} can use two classes, \texttt{OwnerPrivacyFirst} and \texttt{OwnerPrivacySecond}, respectively for the first and the second version of the protocol.
+Through the \lstinline{OwnerPrivacyFirst.setup} method, \texttt{B} can deposit the initial token supply and register all the listeners using \lstinline{OwnerPrivacyFirst.startListening}.
+For the \texttt{OwnerPrivacySecond} contract, the method \lstinline{startListening} is overridden enabling the registration of listeners for the new events.
+With event listeners \texttt{B} is able to handle enrollments automatically.
 
-The sender \texttt{S} classes are \texttt{SenderPrivacyFirst} and \texttt{SenderPrivacySecond}.
-The \lstinline{SenderPrivacyFirst::setup} method allows to enroll to the campaign and pay bond automatically, in addition, the method \lstinline{SenderPrivacyFirst::publishData} handle automatically the encryption and publish the ciphered CID.
-The \texttt{SenderPrivacySecond} was introduced only for pass the correct type to the parametric variable \texttt{C}.
-Despite \texttt{SenderPrivacyFirst} is not super type \texttt{SenderPrivacySecond} because hardhat creates types from the smart contract ABI, duck-typing allows \texttt{SenderPrivacySecond} as type of \texttt{C} because the novel contract have the same methods of the first one, and from the sender-specific point-of-view, the novel protocol does not change the interface.
+The sender \texttt{S} can use two classes, \texttt{SenderPrivacyFirst} and \texttt{SenderPrivacySecond}.
+The \lstinline{SenderPrivacyFirst.setup} method allows \texttt{S} to enroll to the campaign and pay bond automatically, in addition, the method \lstinline{SenderPrivacyFirst.publishData} automatically handles the encryption and publishes the ciphered CID.
+The \texttt{SenderPrivacySecond} was introduced only to pass the correct type to the parametric variable \texttt{C}.
+Since Hardhat generates contract types from the ABI rather than from a shared base class, \texttt{SenderPrivacySecond} does not extend \texttt{SenderPrivacyFirst}; however, TypeScript's structural typing allows it to satisfy the type parameter \texttt{C}, as both classes expose the same sender-facing interface.
 
 The verifier \texttt{V} classes are \texttt{VerifierPrivacyFirst} and \texttt{VerifierPrivacySecond}.
 
