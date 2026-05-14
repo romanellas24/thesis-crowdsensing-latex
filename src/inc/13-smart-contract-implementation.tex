@@ -94,7 +94,44 @@ A description of all overridden functions between the contracts is shown in Tabl
 
 
 \subsection{SDK layer}\label{subsec:implementation-sdk-layer}
-TO BE EVALUATED
+The SDK layer is responsible for all off-chain operations that the smart contracts cannot or should not perform.
+All the cryptographic operations cannot be executed on-chain because the smart contracts are deterministic, so, in the blockchain environment can exist an encryption scheme that is deterministic, because EVM is deterministic~\cite{wood2014ethereum}, so:
+\begin{equation}
+    \texttt{ENC}_k(m) = c = \texttt{ENC}_k(m). \quad \forall m
+    \label{eq:encryption-sceheme-deterministic-formula}
+\end{equation}
+The equation~\ref{eq:encryption-sceheme-deterministic-formula} shows that given the same message $m$, the same ciphertext  $c$ is always produced.
+Deterministic encryption scheme has been shown to be insecure~\cite{katz2020introduction} because if a sender wants to send to a specific receiver the same message two times an adversary $\mathcal{A}$ can understand that the message $m$ was submitted twice because they have seen $c$ flow two times on the network.
+Secure schemes such as RSA-OAEP and AES-GCM require a fresh random value per invocation~\cite{rfc8017, nist-sp-800-38d}; the EVM, having no trusted randomness source, cannot provide this.
+In addition, all the data sent to the smart contract, including the function call arguments, are visible and stored in the blockchain, so, if in a certain use-case is acceptable that $\texttt{ENC}_k$ is deterministic and the encryption were performed within the smart contract, the content of $m$ is in any case stored and visible over the blockchain.
+Furthermore, performing cryptographic operations off-chain avoids the gas overhead that on-chain execution would introduce.
+
+For this reason the SDK must be executed by the protocol actors.
+In addition, the proposed SDK exposes an interface that makes it easy for users to participate in the campaign and guarantees the correct execution of operations.
+
+The UML class diagram of the SDK layer is shown in Figure~\ref{fig:proto-implementation-sdk}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.9\textwidth]{diagrams/proto-implementation-sdk-out}
+        \caption{UML class diagram of SDK. The PrivacyFirstContract (PFC) defines the base facades together the template method hooks, the PrivacySecondContract (PSC) ovverddies the hooks to implement extensions described in Section~\ref{sec:addressing-issues}}\label{fig:proto-implementation-sdk}
+    \end{center}\label{fig:proto-implementation-sdk-container}
+\end{figure}
+
+In the Protocol there are, as before, three types of actors, described in Section~\ref{sec:actors}.
+In the SDK architecture, there are three classes, once for type of Actor.
+
+The campaign initiator \texttt{B} classes are \texttt{OwnerPrivacyFirst} and \texttt{OwnerPrivacySecond}, respectively for the first and the second version of the protocol.
+Using the class SDK, \texttt{B} can, using the \lstinline{OwnerPrivacyFirst::setup} method pay initial supply and register all the listeners using \lstinline{OwnerPrivacyFirst::startListening}.
+For the \texttt{OwnerPrivacySecond} contract, the method \lstinline{startListening} is overridden enabling the listeners registration for novel events.
+With auto-listeners \texttt{B} is able to handle enrollments automatically.
+
+The sender \texttt{S} classes are \texttt{SenderPrivacyFirst} and \texttt{SenderPrivacySecond}.
+The \lstinline{SenderPrivacyFirst::setup} method allows to enroll to the campaign and pay bond automatically, in addition, the method \lstinline{SenderPrivacyFirst::publishData} handle automatically the encryption and publish the ciphered CID.
+The \texttt{SenderPrivacySecond} was introduced only for pass the correct type to the parametric variable \texttt{C}.
+Despite \texttt{SenderPrivacyFirst} is not super type \texttt{SenderPrivacySecond} because hardhat creates types from the smart contract ABI, duck-typing allows \texttt{SenderPrivacySecond} as type of \texttt{C} because the novel contract have the same methods of the first one, and from the sender-specific point-of-view, the novel protocol does not change the interface.
+
+The verifier \texttt{V} classes are \texttt{VerifierPrivacyFirst} and \texttt{VerifierPrivacySecond}.
+
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
 \subsection{Initialization and deployment}\label{subsec:implementation-protocol-init}
 \subsection{Sender enrollment}\label{subsec:implementation-sender-enrollment}

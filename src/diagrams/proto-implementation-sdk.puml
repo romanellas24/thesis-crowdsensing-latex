@@ -1,0 +1,140 @@
+@startuml SDK_Class_Diagram
+
+top to bottom direction
+
+skinparam shadowing false
+skinparam classBackgroundColor White
+skinparam classBorderColor Black
+skinparam stereotypeCBackgroundColor #EEEEEE
+skinparam packageBackgroundColor #FAFAFA
+skinparam packageBorderColor #888888
+skinparam packageStyle rectangle
+skinparam defaultFontName "Helvetica"
+skinparam nodesep 25
+skinparam ranksep 40
+hide empty members
+hide circle
+
+' ============================================================
+' TOP: external references grouped together
+' ============================================================
+package "External references" as Ext #F0F0F0 {
+
+    package "On-chain (Solidity)" as OnChain {
+        class "PrivacyFirstContract"  as CPFC <<contract>>
+        class "PrivacySecondContract" as CPSC <<contract>>
+        class "DataSentTokenContract" as DST  <<ERC-20>>
+        CPFC <|-- CPSC
+        CPFC ..> DST : uses
+    }
+
+    class CipherProvider <<utility>> {
+        + generateKeyPair()
+        + generateEncryptionKeys()
+        + encryptStringHybrid()
+        + decryptStringHybrid()
+    }
+
+    OnChain -[hidden]right-> CipherProvider
+}
+
+' ============================================================
+' SDK PFC layer (left column, vertically stacked)
+' ============================================================
+package "SDK - PFC layer" as SdkPFC {
+
+    class "OwnerPrivacyFirst<C extends PFC>" as OPF <<facade>> {
+        # contract : C
+        # cipher : CipherProvider
+        # encryptionKeys : EncryptionKeyPair
+        --
+        + setup() : void
+        + startListening() : void
+        + closeCampaign() : void
+        # handleSenderEnrollment()   <<hook>>
+        # handleVerifierEnrollment() <<hook>>
+    }
+
+    class "SenderPrivacyFirst<C extends PFC>" as SPF <<facade>> {
+        - contract : C
+        - cipher : CipherProvider
+        - kenc : string
+        --
+        + setup() : void
+        + enroll() : Promise<void>
+        + payBond() : Promise<void>
+        + publishData(cid, position)
+    }
+
+    class "VerifierPrivacyFirst<C extends PFC>" as VPF <<facade>> {
+        # contract : C
+        # cipher : CipherProvider
+        # kdec : string
+        - verifyCallback : VerifyCallback
+        --
+        + setup() : void
+        + enroll() : Promise<void>
+        + payBond() : Promise<void>
+        + startVerifyLoop() : VerifyLoopHandle
+        # decryptCid()              <<hook>>
+    }
+
+    OPF -[hidden]down-> SPF
+    SPF -[hidden]down-> VPF
+}
+
+' ============================================================
+' SDK PSC layer (right column, vertically stacked)
+' ============================================================
+package "SDK - PSC layer" as SdkPSC {
+
+    class "OwnerPrivacySecond" as OPS <<facade>> {
+        - verifierPublicKeys : Map
+        - encryptedCidCache  : Map
+        --
+        + startListening()           <<override>>
+        + notifyVerificationKeyReady()
+        + deliverVerificationBundle()
+        # handleVerifierEnrollment() <<override>>
+    }
+
+    class "SenderPrivacySecond" as SPS <<facade>>
+
+    class "VerifierPrivacySecond" as VPS <<facade>> {
+        + startVerifyLoop()          <<override>>
+        # decryptCid()               <<override>>
+    }
+
+    note as N_PSC #FFFFE0
+        All classes bind
+        <b>C = PrivacySecondContract</b>
+    end note
+
+    OPS -[hidden]down-> SPS
+    SPS -[hidden]down-> VPS
+    VPS -[hidden]down-> N_PSC
+}
+
+' ============================================================
+' Inheritance (horizontal: PFC -> PSC)
+' ============================================================
+OPS --|> OPF
+SPF --|> SPS
+VPF --|> VPS
+
+' ============================================================
+' Package-level dependencies
+' ============================================================
+CipherProvider ..>  SdkPFC : uses
+OnChain ..> SdkPFC         : uses
+CPSC ..> SdkPSC            : uses
+
+' ============================================================
+' Force structural layout
+' ============================================================
+SdkPFC    -[hidden]down-> Ext
+SdkPSC    -[hidden]down-> Ext
+
+SdkPSC -[hidden]down-> SdkPFC
+
+@enduml
