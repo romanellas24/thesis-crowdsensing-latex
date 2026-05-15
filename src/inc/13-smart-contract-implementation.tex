@@ -107,12 +107,12 @@ In addition, all the data sent to the smart contract, including the function cal
 Furthermore, performing cryptographic operations off-chain avoids the gas overhead that on-chain execution would introduce.
 
 For this reason the SDK must be executed by the protocol actors.
-In addition, the proposed SDK exposes an interface that makes it easy for users to participate in the campaign and guarantees the correct execution of operations.
+In addition, the proposed SDK exposes an interface that makes it easy for users to parrfc8017ticipate in the campaign and guarantees the correct execution of operations.
 
 The UML class diagram of the SDK layer is shown in Figure~\ref{fig:proto-implementation-sdk}.
 \begin{figure}
     \begin{center}
-        \includegraphics[width=0.9\textwidth]{diagrams/proto-implementation-sdk-out}
+        \includegraphics[width=1\textwidth]{diagrams/proto-implementation-sdk-out}
         \caption{UML class diagram of SDK. The PrivacyFirstContract (PFC) defines the base facades together the template method hooks, the PrivacySecondContract (PSC) ovverddies the hooks to implement extensions described in Section~\ref{sec:addressing-issues}}\label{fig:proto-implementation-sdk}
     \end{center}\label{fig:proto-implementation-sdk-container}
 \end{figure}
@@ -130,7 +130,18 @@ The \lstinline{SenderPrivacyFirst.setup} method allows \texttt{S} to enroll to t
 The \texttt{SenderPrivacySecond} was introduced only to pass the correct type to the parametric variable \texttt{C}.
 Since Hardhat generates contract types from the ABI rather than from a shared base class, \texttt{SenderPrivacySecond} does not extend \texttt{SenderPrivacyFirst}; however, TypeScript's structural typing allows it to satisfy the type parameter \texttt{C}, as both classes expose the same sender-facing interface.
 
-The verifier \texttt{V} classes are \texttt{VerifierPrivacyFirst} and \texttt{VerifierPrivacySecond}.
+The verifier \texttt{V} can use two classes, \texttt{VerifierPrivacyFirst} and \texttt{VerifierPrivacySecond}.
+The \lstinline{VerifierPrivacyFirst.setup} method allows the verifier to enroll to the campaign and automatically handle the exchange of $K_{\text{dec}}$ and pay bond.
+The novel class \texttt{VerifierPrivacySecond} overrides the \lstinline{enroll} method, called by \lstinline{setup}, and also overrides the \lstinline{requestAuthToVerify} to listen for the new event \texttt{VerifierElectedForData}.
+
+\subsection{Off-chain cryptographic utility}\label{subsec:implementation-offchain-encryptions}
+The cryptographic utility follows a hybrid scheme: each CID is encrypted with a freshly generated symmetric key, and that key is in turn encrypted under the recipient's public key.
+Only the encrypted CIDs travel on the blockchain and the auxiliary public channel.
+
+The symmetric layer uses \texttt{AES-256-GCM}, a NIST-recommended authenticated encryption scheme~\cite{nist-sp-800-38d} that provides confidentiality (via AES in CTR mode) and integrity/authenticity (via the GHASH authentication tag) in a single pass.
+A new symmetric key is sampled at every interaction, so compromise of one session does not affect any other.
+
+The symmetric key is then wrapped with \texttt{RSA-OAEP}, the standard padding scheme for RSA encryption defined in PKCS\#1-v2~\cite{rfc8017}.
 
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
 \subsection{Initialization and deployment}\label{subsec:implementation-protocol-init}
