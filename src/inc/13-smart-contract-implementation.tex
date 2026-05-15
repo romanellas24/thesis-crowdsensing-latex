@@ -138,10 +138,14 @@ The novel class \texttt{VerifierPrivacySecond} overrides the \lstinline{enroll} 
 The cryptographic utility follows a hybrid scheme: each CID is encrypted with a freshly generated symmetric key, and that key is in turn encrypted under the recipient's public key.
 Only the encrypted CIDs travel on the blockchain and the auxiliary public channel.
 
-The symmetric layer uses \texttt{AES-256-GCM}, a NIST-recommended authenticated encryption scheme~\cite{nist-sp-800-38d} that provides confidentiality (via AES in CTR mode) and integrity/authenticity (via the GHASH authentication tag) in a single pass.
+The symmetric layer uses \texttt{AES-256-GCM}, a NIST-recommended authenticated encryption scheme~\cite{nist-sp-800-38d} that provides both confidentiality (via AES in CTR mode) and integrity/authenticity (via the GHASH authentication tag) in a single pass.
 A new symmetric key is sampled at every interaction, so compromise of one session does not affect any other.
 
-The symmetric key is then wrapped with \texttt{RSA-OAEP}, the standard padding scheme for RSA encryption defined in PKCS\#1-v2~\cite{rfc8017}.
+The symmetric key is then wrapped with \texttt{RSA-OAEP}, the standard padding scheme for RSA encryption defined in PKCS\#1~v2.2~\cite{rfc8017}.
+Its predecessor, PKCS\#1~v1.5, is vulnerable to chosen-ciphertext attacks, which OAEP addresses by introducing randomized padding.
+
+Finally, the proposed SDK demonstrates that the protocol is fully implementable by each actor.
+This is not a production-ready library but a reference implementation; as such, the keys live in the program's memory, for this reason, keys are not protected by a hardware security module.
 
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
 \subsection{Initialization and deployment}\label{subsec:implementation-protocol-init}
