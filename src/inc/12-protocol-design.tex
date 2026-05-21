@@ -376,7 +376,7 @@ Once the majority outcome becomes apparent, the verifier submits a vote
 aligned with the majority just before the timeout, guaranteeing
 the reward without performing any actual data validation.
 
-A robust solution would require a commit-reveal scheme~\cite{brassard1983commitreveal, eip1011}, where verifiers first commit a hash of their vote and later reveal the actual result.
+A robust solution would require a commit-reveal scheme~\cite{brassard1988commitreveal, eip1011}, where verifiers first commit a hash of their vote and later reveal the actual result.
 This would prevent verifiers from observing others' votes before submitting their own.
 However, implementing commit-reveal on-chain introduces additional gas costs and protocol complexity, and is left as a future extension.
 

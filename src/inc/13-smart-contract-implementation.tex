@@ -148,10 +148,131 @@ Finally, the proposed SDK demonstrates that the protocol is fully implementable 
 This is not a production-ready library but a reference implementation; as such, the keys live in the program's memory, for this reason, keys are not protected by a hardware security module.
 
 \section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
+This section discusses the main implementation decisions.
+All implementation choices are made in accordance with the protocol design described in Sections~\ref{sec:chunking-system},~\ref{sec:proto-workflow},~\ref{sec:incentive-mechanisms},~\ref{sec:security-analysis-issues} and ~\ref{sec:addressing-issues}.
+
+Since the \texttt{PrivacySecondContract} (\texttt{PSC}) is an extension of \texttt{PrivacyFirstContract} (\texttt{PFC}), both contracts are presented.
+New and overridden methods are highlighted to show the extensions introduced, while methods inherited unchanged from the base protocol are presented for clarity.
+
+
 \subsection{Initialization and deployment}\label{subsec:implementation-protocol-init}
+The campaign initiator \texttt{B} generates their own key pair $(PK_B, SK_B)$ using the \texttt{cipher} in the SDK.
+\begin{lstlisting}[language=typescript,
+    caption={B's key pair generation}]
+// ...
+const ownerKeys = cipher.generateKeyPair();
+// ...
+\end{lstlisting}
+Where \lstinline{cipher} is an object used for all the off-chain cryptographic operations.
+
+Afterward, \texttt{B} executes the contract deployment with the following code:
+
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{PrivacyContract} deployment}]
+const privacyContract = await <CF extends ContractFactory>.deploy(
+    ownerKeys.publicKey,
+    contractConfiguration,
+    dataSentTokenAddress,
+    defaultNovelParams,
+);
+\end{lstlisting}
+Where \lstinline{CF} is a contract factory that can be \texttt{PrivacyFirstContract\_\_factory} or \texttt{PrivacySecondContract\_\_factory}, based on which version to deploy;
+the \lstinline{ownerKeys.publicKey} is the \texttt{B}'s public key, which is required by the contract to settle it to verifiers and senders;
+the contract configuration object (\lstinline{contractConfiguration}) is described in Appendix~\ref{ch:appendix-a-parameters}; the \lstinline{dataSentTokenAddress} is also required for approving transfers from the contract account to the actors' accounts.
+Finally, the \lstinline{defaultNovelParams} object is required only for the \texttt{PSC} deployment.
+
+On the contract side, upon deployment, the constructor is executed and all configuration checks are performed
+\begin{lstlisting}[language=solidity,
+    caption={\texttt{PrivacyFirstContract} constructor}, label={lst:privacy-first-contract-constructor}]
+constructor(string memory ownerPubKey, Config memory config, address dstContractAddress) {
+  require(config.rewardConfig.dataSenderPayout
+    > config.rewardConfig.dataSenderBondPerData,
+    "The senders payout isn't greater than senders bond");
+  require(config.rewardConfig.dataVerifierPayout
+   > config.rewardConfig.dataVerifierBondPerData,
+   "The verifiers payout isn't greater than verifiers bond");
+  require(config.originCoordinates.isValid(),
+    "Origin coordinates should be valid");
+  require(config.needs.checksRequired % 2 == 1,
+    "Checks must be odd");
+  require(config.chunkConfig.chunk4Side > 0,
+    "chunk4Side must be greater than 0");
+  require(config.chunkConfig.chunkSize > 0,
+    "chunkSize must be greater than 0");
+  require(config.needs.verifierCooldown > 0,
+    "Cooldown should be positive");
+    // setters ...
+}
+\end{lstlisting}
+
+After the deployment, the classes \texttt{OwnerPrivacyFirst} (\texttt{OPF}) or \texttt{OwnerPrivacySecond} (\texttt{OPS}) can be instantiated.
+\begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s constructor, inherited by \texttt{OPS}},label={lst:proto-implementation-opf-constructor}]
+    constructor(signer: HardhatEthersSigner,
+    contract: C,
+    dstToken: DataSentTokenContract,
+    ownerKeys: KeyPair,
+    cipher: CipherProvider) {
+    //setters for all the params above
+    this.encryptionKeys = cipher.generateEncryptionKeys();
+}
+\end{lstlisting}
+
+As shown in Listing~\ref{lst:proto-implementation-opf-constructor} the only business logic implemented by the constructor is the auto-generation of encryption keys.
+Finally, the owner can invoke \lstinline{OwnerPrivacy*.setup} defined in \texttt{OPF} as shown in Listing~\ref{lst:proto-implementation-opf-setup}.
+The \lstinline{payInitialSupply} method automatically handles the supply payout to the contract account; the event listeners are then set up by invoking \lstinline{startListening}.
+
+\begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s setup method, inherited from \texttt{OPS}},label={lst:proto-implementation-opf-setup}]
+async setup() {
+   //...
+   await this.payInitialSupply(config.rewardConfig.totalDst);
+   this.startListening();
+   //...
+}
+\end{lstlisting}
+
+The \lstinline{startListening} method is defined in \texttt{OPF} and overridden in \texttt{OPS} to support the additional events in the second version of the protocol, code is shown in Listings~\ref{lst:proto-implementation-opf-start-listening} and~\ref{lst:proto-implementation-ops-start-listening}.
+
+\begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s startListening method},label={lst:proto-implementation-opf-start-listening}]
+startListening(): void {
+//...
+this.contract.on(
+    this.contract.getEvent("SenderEnrolledEvent"),
+    async (sender: string, key: string) => {
+        await this.handleSenderEnrollment(sender, key)})
+
+this.contract.on(
+    this.contract.getEvent("VerifierEnrolledEvent"),
+    async (verifier: string, key: string) => {
+       await this.handleVerifierEnrollment(verifier, key)})
+
+this.contract.on(
+    this.contract.getEvent("DataVerified"),
+    (dataId: bigint, result: boolean) => {
+    this.handleDataVerificationCompleted(dataId, result)})
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=typescript, caption={\texttt{OPS}'s startListening method, uses the inherited method from parent class},label={lst:proto-implementation-ops-start-listening}]
+override startListening(): void {
+//...
+super.startListening();
+
+this.contract.on(
+    this.contract.getEvent("DataRequiredVerificationKeyGeneration"),
+    async (dataId: bigint, event: any) => {
+        await this.handleDataRequiresKey(Number(dataId), event)})
+
+this.contract.on(
+    this.contract.getEvent("VerifierElectedForData"),
+    async (verifier: string, dataId: bigint) => {
+        await this.handleVerifierElected(verifier, Number(dataId))})
+}
+\end{lstlisting}
+
 \subsection{Sender enrollment}\label{subsec:implementation-sender-enrollment}
 \subsection{Verifier enrollment}\label{subsec:implementation-verifier-enrollment}
 \subsection{Data submission}\label{subsec:implementation-data-submission}
+\subsection{Spatial data validation}\label{subsec:implementation-spatial-data-validation}
 \subsection{Verification workflow}\label{subsec:implementation-verification}
 \subsection{Extended protocol}\label{subsec:implementation-extended-protocol}
 \section{Economic model}\label{sec:implementation-economic-model}
