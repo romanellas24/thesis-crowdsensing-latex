@@ -275,7 +275,7 @@ For this reason the SDK class \texttt{SenderPrivacySecond} (\texttt{SPS}) has no
 The only role for the class is to give the right contract interface to the superclass.
 
 Class binding implementation is shown in Listings~\ref{lst:proto-implementation-sps-full-implementation} and~\ref{lst:proto-implementation-spf-class-declaration}.
-For this reason, in this subsection, all methods discussed are defined in class \texttt{SenderPrivacyFirst} (\texttt{SPF}).
+For this reason, in this section, all methods discussed are defined in class \texttt{SenderPrivacyFirst} (\texttt{SPF}).
 
 \begin{lstlisting}[language=typescript,
     caption={Full \texttt{SenderPrivacySecond} class implementation},
@@ -353,15 +353,39 @@ The ciphertext of $K_{enc}$ is returned; the sender then uses $SK_S$ to decrypt 
 With this implementation the sender enrollment reflects the design choices made in Section~\ref{subsec:proto-sender-enrollment}.
 
 \subsection{Verifier enrollment}\label{subsec:implementation-verifier-enrollment}
-A
+This Section describes the verifier enrollment phase for the \texttt{PrivacyFirstContract}.
+The extended protocol version is discussed in Sections~\ref{subsec:extended-protocol-extended-verifier-enrollment} and~\ref{subsec:extended-protocol-extended-data-submission} which implement the modifications in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+
+In the \texttt{PrivacyFirstContract} the implementation is very similar to the one realized for senders, shown in Section~\ref{subsec:implementation-sender-enrollment}.
+
+The verifiers can use the \texttt{VerifierPrivacyFirst} (\texttt{VPF}) class to join the crowdsensing campaign.
+The constructor of the class automatically generates $(PK_V, SK_V)$ key pair.
+
+After the object initialization, the verifier has to call the \lstinline{setup} method.
+The method calls the \lstinline{enroll} method and \lstinline{payBond}, which handles the bond payment, like the one implemented for the senders.
+The workflow is the same for senders but with different functions to invoke and event to wait for.
+
+The general workflow is the following:
+\begin{enumerate}
+    \item \texttt{V} register a listener for the \lstinline{VerifierDecryptionKeyReady} event;
+    \item \texttt{V} retrieve $PK_B$ which is embedded in the smart contract;
+    \item \texttt{V} encrypt $PK_V$ using $PK_B$ and sends it to the smart contract using the \lstinline{publishEncryptedVerifierPublicKey} function;
+    \item The Smart Contract triggers via \lstinline{VerifierEnrolledEvent} the campaign initiator which is listening for this event as shown in the Listing~\ref{lst:proto-implementation-opf-start-listening};
+    \item \texttt{B} via the \lstinline{handleVerifierEnrollment} handler, encrypts $K_{dec}$ using $PK_V$, used for data decryption during verification;
+    \item \texttt{B} sends the calculated ciphertext to the smart contract using \lstinline{publishVerifierDecryptionKey} which updates the Smart Contract state and the verifier is officially in the campaign, finally, \lstinline{VerifierDecryptionKeyReady} event is emitted;
+    \item \texttt{V} is triggered by the event and get $K_{dec}$
+\end{enumerate}
+
+After these steps the verifier can verify data and start the verification workflow, that will be discussed in Section~\ref{subsec:implementation-verification}.
+
+With this implementation the verifier enrollment reflects the design choices made in Section~\ref{subsec:proto-verifier-enrollment}.
+
 \subsection{Data submission}\label{subsec:implementation-data-submission}
 B
 \subsection{Spatial data validation}\label{subsec:implementation-spatial-data-validation}
 C
 \subsection{Verification workflow}\label{subsec:implementation-verification}
 D
-\subsection{Extended protocol}\label{subsec:implementation-extended-protocol}
-E
 \section{Economic model}\label{sec:implementation-economic-model}
 F
 \subsection{DST token integration}\label{subsec:implementation-dst-integration}
@@ -370,6 +394,16 @@ G
 H
 \subsection{Bond logic}\label{subsec:implementation-bond}
 I
+\section{Extended protocol}\label{sec:implementation-extended-protocol}
+D'
+\subsection{Extended verifier enrollment}\label{subsec:extended-protocol-extended-verifier-enrollment}
+E
+\subsection{Extended data submission}\label{subsec:extended-protocol-extended-data-submission}
+E'
+\subsection{Verifier additional penalties}\label{subsec:extended-protocol-verifier-additional-penalties}
+E''
+\subsection{Introducing geographical incentives}\label{subsec:extended-protocol-introducing-geographical-incentives}
+E'''
 \section{Gas optimization}\label{sec:implementation-gas-optimization}
 L
 \section{Contract lifecycle and state transitions}\label{sec:implementation-lifecycle}
