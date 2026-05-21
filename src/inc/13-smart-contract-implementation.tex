@@ -169,7 +169,7 @@ Afterward, \texttt{B} executes the contract deployment with the following code:
 
 \begin{lstlisting}[language=typescript,
     caption={\texttt{PrivacyContract} deployment}]
-const privacyContract = await <CF extends ContractFactory>.deploy(
+const privacyContract = <CF extends ContractFactory>.deploy(
     ownerKeys.publicKey,
     contractConfiguration,
     dataSentTokenAddress,
@@ -224,7 +224,7 @@ The \lstinline{payInitialSupply} method automatically handles the supply payout 
 \begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s setup method, inherited from \texttt{OPS}},label={lst:proto-implementation-opf-setup}]
 async setup() {
    //...
-   await this.payInitialSupply(config.rewardConfig.totalDst);
+   this.payInitialSupply(config.rewardConfig.totalDst);
    this.startListening();
    //...
 }
@@ -238,12 +238,12 @@ startListening(): void {
 this.contract.on(
     this.contract.getEvent("SenderEnrolledEvent"),
     async (sender: string, key: string) => {
-        await this.handleSenderEnrollment(sender, key)})
+        this.handleSenderEnrollment(sender, key)})
 
 this.contract.on(
     this.contract.getEvent("VerifierEnrolledEvent"),
     async (verifier: string, key: string) => {
-       await this.handleVerifierEnrollment(verifier, key)})
+       this.handleVerifierEnrollment(verifier, key)})
 
 this.contract.on(
     this.contract.getEvent("DataVerified"),
@@ -260,25 +260,117 @@ super.startListening();
 this.contract.on(
     this.contract.getEvent("DataRequiredVerificationKeyGeneration"),
     async (dataId: bigint, event: any) => {
-        await this.handleDataRequiresKey(Number(dataId), event)})
+        this.handleDataRequiresKey(Number(dataId), event)})
 
 this.contract.on(
     this.contract.getEvent("VerifierElectedForData"),
     async (verifier: string, dataId: bigint) => {
-        await this.handleVerifierElected(verifier, Number(dataId))})
+        this.handleVerifierElected(verifier, Number(dataId))})
 }
 \end{lstlisting}
 
 \subsection{Sender enrollment}\label{subsec:implementation-sender-enrollment}
+The interface for the Sender side in both implementations of the protocol is the same.
+For this reason the SDK class \texttt{SenderPrivacySecond} (\texttt{SPS}) has no overridden methods.
+The only role for the class is to give the right contract interface to the superclass.
+
+Class binding implementation is shown in Listings~\ref{lst:proto-implementation-sps-full-implementation} and~\ref{lst:proto-implementation-spf-class-declaration}.
+For this reason, in this subsection, all methods discussed are defined in class \texttt{SenderPrivacyFirst} (\texttt{SPF}).
+
+\begin{lstlisting}[language=typescript,
+    caption={Full \texttt{SenderPrivacySecond} class implementation},
+    label={lst:proto-implementation-sps-full-implementation}]
+class SenderPrivacySecond
+    extends SenderPrivacyFirst<PrivacySecondContract> {}
+\end{lstlisting}
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{SenderPrivacyFirst} class declaration},
+    label={lst:proto-implementation-spf-class-declaration}]
+class SenderPrivacyFirst
+    <C extends PrivacyFirstContract = PrivacyFirstContract> {
+    //...
+    private readonly contract: C;
+    //...
+    }
+\end{lstlisting}
+
+Before publishing data to IPFS, the sender needs to execute the code shown in Listing~\ref{lst:proto-implementation-sps-class-usage}.
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{SenderPrivacySecond} class usage},
+    label={lst:proto-implementation-sps-class-usage}]
+const sender = new SenderPrivacySecond
+    (_sender, contract, dst, cipher);
+sender.setup();
+\end{lstlisting}
+Where \lstinline{_sender} is HardhatSigner, \lstinline{contract} is a reference to the deployed contract, \lstinline{dst} is the reference to the \texttt{DataSentToken} contract and \lstinline{cipher} is the cipher utility in the SDK.
+
+The constructor generates the sender's key pair $(PK_S, SK_S)$.
+The \lstinline{setup} method calls the enroll method, and the \lstinline{payBond} method that approves the \texttt{DST} transfer to the smart contract, after approval the sender calls the \lstinline{senderPayBond} function of the Smart Contract that completes the transfer and updates the internal balance.
+The \lstinline{enroll} method is implemented as shown in Listing~\ref{lst:proto-implementation-spf-enroll-declaration}
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{SenderPrivacyFirst} enroll method},
+    label={lst:proto-implementation-spf-enroll-declaration}]
+//After SenderEncryptionKeyReady listener subscription
+const ownerPubKey: string = contract.getInitiatorPublicKey();
+const encryptedPK = cipher.encryptStringHybrid(ownerPubKey, keys.publicKey); //encrypt PK_S using PK_B.
+contract.publishEncryptedSenderPublicKey(JSON.stringify(encryptedPK)); //Publish encrypted PK_S
+//wait for key from SenderEncryptionKeyReady emission (will be saved in encryptedKenc)
+kenc = cipher.decryptStringHybrid(keys.privateKey, JSON.parse(encryptedKenc)); //Received K_enc
+\end{lstlisting}
+
+The sender \texttt{S} uses the \lstinline{publishEncryptedSenderPublicKey}, the implementation is shown in Listing~\ref{lst:proto-implementation-pfc-sender-pk-publish}.
+The function emits the \lstinline{SenderEnrolledEvent} event, which is handled by the campaign initiator as shown in Listing~\ref{lst:proto-implementation-opf-start-listening}.
+\begin{lstlisting}[language=solidity,
+    caption={publishEncryptedSenderPublicKey method, implemented in \texttt{PFC} and inherited from \texttt{PSC}},
+    label={lst:proto-implementation-pfc-sender-pk-publish}]
+function publishEncryptedSenderPublicKey(string calldata encryptedPubKey) public {
+  require(_campaignOpen, "Campaign is closed");
+  require(!_senders[msg.sender],"Sender has already joined");
+  emit SenderEnrolledEvent(msg.sender, encryptedPubKey);
+}
+\end{lstlisting}
+
+When \texttt{B} is triggered by the event, their SDK is triggered and the code handler is shown in Listing~\ref{lst:proto-implementation-pfc-owner-sender-enrollment}, basically, the campaign initiator decrypts the ciphertext to get $PK_S$.
+Finally, $K_{enc}$ is encrypted using $PK_S$ and sends it via the Smart Contract to \texttt{S} using \lstinline{publishSenderEncryptionKey}.
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{B}'s callback function for sender key publishing},
+    label={lst:proto-implementation-pfc-owner-sender-enrollment}]
+handleSenderEnrollment(senderAddress: string, encryptedPubKeyJson: string) {
+  const bundle = JSON.parse(encryptedPubKeyJson);
+  const senderPubKey = cipher.decryptStringHybrid(keys.privateKey, bundle);
+  const encryptedKenc = JSON.stringify(
+    cipher.encryptStringHybrid(senderPubKey, encryptionKeys.encryptionKey));
+  contract.publishSenderEncryptionKey(
+    senderAddress, encryptedKenc);
+}
+\end{lstlisting}
+
+The \lstinline{publishSenderEncryptionKey} call completes the registration and creates a struct to store the sender's information.
+Finally, the function emit the SenderEncryptionKeyReady event, which is awaited from the sender, like shown in Listing~\ref{lst:proto-implementation-spf-enroll-declaration}.
+The handler is quite simple, since the \lstinline{SenderEncryptionKeyReady} has two parameters (senderAddress, encryptionKeyCiphertext), if \texttt{S} sees their address in senderAddress the handler is triggered and removed.
+The ciphertext of $K_{enc}$ is returned; the sender then uses $SK_S$ to decrypt and obtain $K_{enc}$.
+
+With this implementation the sender enrollment reflects the design choices made in Section~\ref{subsec:proto-sender-enrollment}.
+
 \subsection{Verifier enrollment}\label{subsec:implementation-verifier-enrollment}
+A
 \subsection{Data submission}\label{subsec:implementation-data-submission}
+B
 \subsection{Spatial data validation}\label{subsec:implementation-spatial-data-validation}
+C
 \subsection{Verification workflow}\label{subsec:implementation-verification}
+D
 \subsection{Extended protocol}\label{subsec:implementation-extended-protocol}
+E
 \section{Economic model}\label{sec:implementation-economic-model}
+F
 \subsection{DST token integration}\label{subsec:implementation-dst-integration}
+G
 \subsection{Reward logic}\label{subsec:implementation-reward}
+H
 \subsection{Bond logic}\label{subsec:implementation-bond}
+I
 \section{Gas optimization}\label{sec:implementation-gas-optimization}
+L
 \section{Contract lifecycle and state transitions}\label{sec:implementation-lifecycle}
-TO BE EVALUATED
+M
