@@ -157,7 +157,8 @@ New and overridden methods are highlighted to show the extensions introduced, wh
 
 \subsection{Initialization and deployment}\label{subsec:implementation-protocol-init}
 The campaign initiator \texttt{B} generates their own key pair $(PK_B, SK_B)$ using the \texttt{cipher} in the SDK.
-\begin{lstlisting}[language=typescript,
+\begin{lstlisting}[
+    language=typescript,
     caption={B's key pair generation}]
 // ...
 const ownerKeys = cipher.generateKeyPair();
@@ -381,9 +382,108 @@ After these steps the verifier can verify data and start the verification workfl
 With this implementation the verifier enrollment reflects the design choices made in Section~\ref{subsec:proto-verifier-enrollment}.
 
 \subsection{Data submission}\label{subsec:implementation-data-submission}
-B
+The data submission is the core phase where the crowdsensing campaign obtains data.
+
+The SDK implementation for the senders is written in \texttt{SenderPrivacyFirst} (\texttt{SPF}) and is shown in Listing~\ref{lst:proto-implementation-spf-sender-publish-data}.
+\begin{lstlisting}[
+language=typescript,
+caption={Sender \lstinline{publishData} method to send data to the campaign},
+label={lst:proto-implementation-spf-sender-publish-data}]
+async publishData(plainCid: string, position: any) {
+if (!this.kenc) throw new Error("Not enrolled - Kenc not available");
+
+const encrypted = this.cipher.encryptStringHybrid(this.kenc, plainCid);
+const cidBytes = toUtf8Bytes(JSON.stringify(encrypted));
+return this.contract.connect(this.signer).publishIpfsCid(cidBytes, position);
+\end{lstlisting}
+
+Basically, the method checks if $K_{enc}$ is available, if not, it throws an error, otherwise, uses $K_{enc}$ to encrypt the CID returned by the IPFS node after uploading the encrypted data, where they have submitted the data and publishes the encrypted CID using the smart contract function \lstinline{publishIpfsCid}.
+
+The function, which is shown in Listing~\ref{lst:proto-implementation-publish-ipfs-cid}, performs a series of checks such as bond availability, maximum data count per chunk and per sender, and geographical area validation.
+If any of these checks fails, then the entire transaction is reverted, but if the data is submitted a struct to store submission information is created and the data index is added to the pending queue, waiting for verification.
+In this phase of the protocol, no action from the campaign initiator is required; the \lstinline{DataVerificationRequestedEvent} event is emitted to notify verifiers that new data is available for verification.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{publishIpfsCid} function implementation},
+    label={lst:proto-implementation-publish-ipfs-cid}]
+
+function publishIpfsCid(bytes calldata encryptedCid, GlobalPosition calldata position) external virtual {
+  require(_campaignOpen, "Campaign is closed");
+  require(_senders[msg.sender], "Only senders allowed...");
+  require(position.isValid(), "Invalid Coordinates");
+  require(_senderInformation[msg.sender].dataSubmitted
+    < _config.needs.maxDataPerSender
+    || _config.needs.maxDataPerSender == 0,
+  "Max data limit reached");
+
+  // if maxDataPerSender == 0 (unlimited), bond check is skipped
+  // since total bond cannot be pre-computed
+  require(_senderInformation[msg.sender].bondBalance
+    >= _config.rewardConfig.dataSenderBondPerData
+    || _config.needs.maxDataPerSender == 0,
+    "Insufficient DST balance in bond");
+
+  PackedPosition memory packed = position.packCoordinates();
+  (uint16 chunkIndex, bool inside) = _getChunkIndex(packed);
+  require(inside, "Outside campaign area");
+  require(_dataPerChunkReceived[chunkIndex]
+    < _config.needs.maximumDataPerChunk
+    || _config.needs.maximumDataPerChunk == 0,
+  "Too many data in this chunk!");
+
+  _dataEntries[_dataCount] = DataEntry({
+    sender: msg.sender,
+    encryptedCid: encryptedCid,
+    status: DataStatus.PENDING,
+    completedChecks: 0,
+    positiveChecks: 0,
+    assignedChecks: 0,
+    chunkIndex: chunkIndex,
+    earliestSlotDeadline: 0});
+  _dataPerChunkReceived[chunkIndex]++;
+  _senderInformation[msg.sender].dataSubmitted++;
+  emit DataVerificationRequestedEvent(_dataCount);
+
+  _addToPending(_dataCount);
+
+  _dataCount++;
+
+  if (_config.needs.maxDataPerSender > 0) {
+    unchecked {
+      _senderInformation[msg.sender].bondBalance = _senderInformation[msg.sender].bondBalance -
+      _config.rewardConfig.dataSenderBondPerData;
+    }}
+}
+\end{lstlisting}
+
+This code implements the Data submission workflow described in Section~\ref{subsec:proto-datasubmit}.
+
 \subsection{Spatial data validation}\label{subsec:implementation-spatial-data-validation}
-C
+The spatial data validation is required for the protocol because the data need to be localized in a certain area of the geographical space.
+In the \lstinline{publishIpfsCid} function there are some lines of code that handles these controls and locate the data in proper chunks.
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{publishIpfsCid} function spatial validation code},
+    label={lst:proto-implementation-publish-ipfs-cid-geographical-handling}]
+function publishIpfsCid(//...
+  GlobalPosition calldata position)
+  external virtual {
+  //...
+  require(position.isValid(), "Invalid Coordinates");
+  require(_senderInformation[msg.sender].dataSubmitted
+  //...
+  PackedPosition memory packed = position.packCoordinates();
+  (uint16 chunkIndex, bool inside) = _getChunkIndex(packed);
+  require(inside, "Outside campaign area");
+  //...
+  _dataPerChunkReceived[chunkIndex]++;
+  //...
+}
+\end{lstlisting}
+The \lstinline{publishIpfsCid} function requires, between others
+% TODO CONTINUE HERE
+
 \subsection{Verification workflow}\label{subsec:implementation-verification}
 D
 \section{Economic model}\label{sec:implementation-economic-model}
