@@ -360,7 +360,7 @@ The extended protocol version is discussed in Sections~\ref{subsec:extended-prot
 In the \texttt{PrivacyFirstContract} the implementation is very similar to the one realized for senders, shown in Section~\ref{subsec:implementation-sender-enrollment}.
 
 The verifiers can use the \texttt{VerifierPrivacyFirst} (\texttt{VPF}) class to join the crowdsensing campaign.
-The constructor of the class automatically generates $(PK_V, SK_V)$ key pair.
+The constructor of the class automatically generates $(PK_V, SK_V)$ key pair and require the verifyCallback to execute on every data to check.
 
 After the object initialization, the verifier has to call the \lstinline{setup} method.
 The method calls the \lstinline{enroll} method and \lstinline{payBond}, which handles the bond payment, like the one implemented for the senders.
@@ -505,7 +505,7 @@ Each decimal part has a magnitude strictly below $10,000,000$, since that's the 
 The sign of the coordinate follows a simple rule: when the integer part is non-zero it carries the sign, and the decimal contributes only its magnitude; when the integer part is zero, the decimal carries the sign instead.
 This second branch is what makes the band (-1°, 0°) representable on both axes, without it, every point between the equator and one degree south, or between Greenwich and one degree west, would be unreachable.
 
-The \lstinline{packCoordinates} function collapses the split (integer, decimal) representation into a single signed 32-bit integer per axis, scaled by 10^7.
+The \lstinline{packCoordinates} function collapses the split (integer, decimal) representation into a single signed 32-bit integer per axis, scaled by $10^7$.
 
 The resulting E7 format has about 1.11 cm of precision.
 
@@ -593,7 +593,106 @@ function _getChunkIndex(PackedPosition memory packed) internal view returns (uin
 \end{lstlisting}
 
 \subsection{Verification workflow}\label{subsec:implementation-verification}
-D
+Verifiers have listeners on the \lstinline{DataVerificationRequestedEvent} event and they are waiting for it.
+As shown in Section~\ref{subsec:implementation-data-submission}, at the end of the encrypted CID publishing the smart contract emits the \lstinline{DataVerificationRequestedEvent}.
+This event is emitted in this phase only by the \texttt{PrivacyFirstContract}, not in the extended one.
+Although \lstinline{DataVerificationRequestedEvent} has a parameter that indicates the dataId, this parameter is ignored, because the smart contract selects which data to verify in order to enforce a cooldown mechanism.
+
+The \texttt{VerifierPrivacyFirst} (\texttt{VPF}) exposes the method \lstinline{requestAndVerify} that allows the verifier to join the verification process of data, the same name is used to describe a function in the smart contract that validates and checks the verifier's requests.
+At the end of the validation performed by the smart contract, the \lstinline{VerifierElected} event is emitted and the verifier can proceed with validity checks.
+The SDK \lstinline{requestAuthToVerify} method calls the smart contract function and returns the \lstinline{decryptedCid}, after which the verifier can execute checks.
+The smart contract \lstinline{requestAuthToVerify} function is shown in Listing~\ref{lst:proto-implementation-pfc-request-auth-to-verify}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{requestAuthToVerify} function implementation},
+    label={lst:proto-implementation-pfc-request-auth-to-verify}]
+function requestAuthToVerify() external {
+  //Checks on enrollment and bond
+
+  for (uint256 i = 0; i < _pendingDataIds.length; i++) {
+    uint256 dataIndex = _pendingDataIds[i];
+
+    //cooldown check
+    if (_verifierInformation[msg.sender].hasVerified) {
+      uint256 last = _verifierInformation[msg.sender].lastVerified;
+      if (dataIndex >= last &&
+        dataIndex < last + _config.needs.verifierCooldown) continue;
+    }
+
+    //checks on data slots
+    if (_dataEntries[dataIndex].assignedChecks
+      >= _config.needs.checksRequired
+      && _dataEntries[dataIndex].earliestSlotDeadline
+      > block.timestamp) {continue;}
+
+    (uint8 slotIndex, bool found) = _findAvailableSlot(dataIndex);
+    if (!found) continue;
+
+    //Underflow safety. Bond decreasing
+    unchecked {
+        _verifierInformation[msg.sender].bondBalance =
+          _verifierInformation[msg.sender].bondBalance
+          - _config.rewardConfig.dataVerifierBondPerData;
+    }
+
+    uint48 deadline = uint48(block.timestamp + _config.needs.verificationTimeout);
+
+    _verificationSlots[dataIndex][slotIndex] = VerificationSlot({
+      verifier: msg.sender,
+      result: false,
+      completed: false,
+      deadline: deadline});
+
+    // Update earliestSlotDeadline if unset or if the new deadline is sooner
+    if (_dataEntries[dataIndex].earliestSlotDeadline == 0 ||
+      deadline <
+      _dataEntries[dataIndex].earliestSlotDeadline) {
+        _dataEntries[dataIndex].earliestSlotDeadline
+          = deadline;}
+
+    //Assigning slots
+    if (slotIndex >=
+      _dataEntries[dataIndex].assignedChecks) {
+        _dataEntries[dataIndex].assignedChecks
+        = slotIndex + 1;}
+
+    _verifierInformation[msg.sender].verifyingData = dataIndex;
+    _verifierInformation[msg.sender].isVerifying = true;
+
+    _emitVerifierElected(msg.sender, dataIndex, slotIndex);
+    return;
+  }
+  revert("No data available for verification");
+}
+\end{lstlisting}
+
+The function performs multiple checks to guarantee a fast data retrieval with the minimum amount of gas usage as discussed in Section~\ref{sec:implementation-gas-optimization}, the \lstinline{_findAvailableSlot} function checks if a data has a free slot, if not, the function analyzes the next pending entry.
+In \lstinline{_emitVerifierElected}, a \lstinline{VerifierElected} event is emitted; the verifiers are waiting for that event, when triggered by the event, they can invoke the \lstinline{verifyCallback} that is given in the constructor, as explained in Section~\ref{subsec:implementation-verifier-enrollment}.
+In addition, the verifiers can use \lstinline{submitVerifyResult} function of the smart contract to deliver the verification result.
+A summary of verify workflow is shown in \lstinline{requestAndVerify} method of \texttt{VerifyPrivacyFirst} class, whose implementation in shown in Listing~\ref{lst:proto-implementation-vpf-request-and-verify}.
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{VPF}'s \lstinline{requestAndVerify} method implementation},
+    label={lst:proto-implementation-vpf-request-and-verify}]
+async requestAndVerify(): Promise<{ dataId: number;
+    decryptedCid: string;
+    result: VerificationResult }> {
+    try{
+    const {dataId, decryptedCid}
+      = await this.requestAuthToVerify();
+    const result = this.verifyCallback(decryptedCid, dataId);
+    const tx = await this.submitResult(result);
+    await tx.wait();
+    return {dataId, decryptedCid, result};
+  } catch (ignored){}
+  return {dataId: -1, decryptedCid: "", result: VerificationResult.CANNOT_COMPLETE};
+}
+\end{lstlisting}
+
+When the majority of required verifiers votes with the same significant result (data is valid or invalid), the validated data is removed from the pending queue and the smart contract rewards the correct verifiers and the sender, if the data was valid.
+The whole verifier workflow is implemented looking at Section~\ref{subsec:proto-verification}; the final decisions of the smart contract implement the data lifecycle shown in Figure~\ref{fig:proto-design-datum-lifecycle}.
+
 \section{Economic model}\label{sec:implementation-economic-model}
 F
 \subsection{DST token integration}\label{subsec:implementation-dst-integration}
@@ -613,6 +712,34 @@ E''
 \subsection{Introducing geographical incentives}\label{subsec:extended-protocol-introducing-geographical-incentives}
 E'''
 \section{Gas optimization}\label{sec:implementation-gas-optimization}
-L
+% TODO: RICONTROLLARE
+The data structure is based on swap-and-pop using index mapping, the result is unordered set, but it is gas-efficient and useful for this use case, because the verification order is not critical.
+The Listing~\ref{lst:proto-implementation-pfc-data-pending} shows how the data structure is implemented, how the data are insert and removed from it.
+The usage is shown in Listing~\ref{lst:proto-implementation-pfc-request-auth-to-verify}, all the operations have $O(1)$ computational cost, an example of \lstinline{_addToPending} function usage is shown in Listing~\ref{lst:proto-implementation-publish-ipfs-cid}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Gas-optimized pendingData unordered set implementation},
+    label={lst:proto-implementation-pfc-data-pending}]
+//Ausiliary data structures
+uint256[] internal _pendingDataIds;
+mapping(uint256 => uint256) internal _pendingIndex;
+
+//Insert into data structure
+function _addToPending(uint256 dataId) internal {
+    _pendingIndex[dataId] = _pendingDataIds.length;
+    _pendingDataIds.push(dataId);
+}
+
+//Remove from data structure
+function _removeFromPending(uint256 dataId) internal {
+    uint256 idx = _pendingIndex[dataId];
+    uint256 lastId = _pendingDataIds[_pendingDataIds.length - 1];
+    _pendingDataIds[idx] = lastId;
+    _pendingIndex[lastId] = idx;
+    _pendingDataIds.pop();
+    delete _pendingIndex[dataId];
+}
+\end{lstlisting}
 \section{Contract lifecycle and state transitions}\label{sec:implementation-lifecycle}
 M
