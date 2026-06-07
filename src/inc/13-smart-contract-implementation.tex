@@ -694,13 +694,188 @@ When the majority of required verifiers votes with the same significant result (
 The whole verifier workflow is implemented looking at Section~\ref{subsec:proto-verification}; the final decisions of the smart contract implement the data lifecycle shown in Figure~\ref{fig:proto-design-datum-lifecycle}.
 
 \section{Economic model}\label{sec:implementation-economic-model}
-F
+The economic model described in Section~\ref{sec:incentive-mechanisms} executes its logic on-chain through the smart contract and the use of the DST ERC-20 token.
+The same token is used to manage bond deposits.
+The following subsections describe how the reward logic and bond system are enforced.
+
 \subsection{DST token integration}\label{subsec:implementation-dst-integration}
-G
+The adoption of a custom token instead of using ETH is justified because of a certain numbers of wanted aspects, like reentrancy protection, because ERC-20 has no callback and hooks to exploit to perform the attack~\cite{eip20}.
+The Table~\ref{tab:economic-model-eth-dst-comparison} shows a comparison between use ETH native and a custom ERC-20 token, like DST.
+In addition, the absence of payable functions blocks the receiving of ETH by error, because solidity on compile time adds a check to avoid this type of errors~\cite{solidity-abi-spec}.
+
+The DST token is implemented thought the \texttt{DataSentTokenContract}, which implementation is shown in Listing~\ref{lst:proto-implementation-dst-contract}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{DataSentTokenContract} (DST) token implementation},
+    label={lst:proto-implementation-dst-contract}]
+contract DataSentTokenContract is ERC20, Ownable {
+    constructor(uint256 initialSupply) ERC20("DataSentToken", "DST") Ownable(msg.sender) {
+        _mint(msg.sender, initialSupply);
+    }
+
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
+
+    function burn(uint256 amount) public {
+        _burn(msg.sender, amount);
+    }
+}
+\end{lstlisting}
+
+\begin{table}
+    \begin{tabular}{|p{2.8cm}|p{5.5cm}|p{5.5cm}|}
+        \hline
+        \textbf{Aspect} & \textbf{ETH native} & \textbf{ERC-20 (DST)} \\
+        \hline
+        Deposit mechanism
+        & \texttt{msg.value} su funzione \texttt{payable}
+        & \texttt{approve} + \texttt{transferFrom} \\
+        \hline
+        Reentrancy risk
+        & High: \texttt{.call} triggers recipient's \texttt{receive}/\texttt{fallback}
+        & Lower: not overridden \texttt{transfer} does not trigger external code \\
+        \hline
+        Multiple payouts
+        & Every \texttt{.call} can fail independently
+        & \texttt{transfer} reverts \\
+        \hline
+        \texttt{payable} functions
+        & Necessary
+        & Not necessary \\
+        \hline
+        Extra step
+        & -
+        & \texttt{approve} is required before deposit \\
+        \hline
+        Gas per transfer
+        &  21.000 gas~\cite{wood2014ethereum}
+        & DA MISURARE! \\ %TODO MISURARE (con GAS REPORTER MISURARE LA TRANSFER FROM).
+        \hline
+    \end{tabular}
+    \caption{Comparison between ETH native and ERC-20 (DST)}
+    \label{tab:economic-model-eth-dst-comparison}
+\end{table}
+
 \subsection{Reward logic}\label{subsec:implementation-reward}
-H
+Rewards incentivize senders to contribute data to the campaign.
+For verifiers, the reward is the incentive to act honestly.
+The reward is granted to senders that submit valid data, and is also paid to verifiers that vote in agreement with the majority on whether a given datum is valid.
+
+In \texttt{PrivacyFirstContract} the reward for the sender is constant and equal to \texttt{dataSenderPayout}, described in Table~\ref{tab:params-rewards}.
+For \texttt{PrivacySecondContract} the behavior is described in Section~\ref{subsec:extended-protocol-introducing-geographical-incentives}.
+
+For both protocols, the reward for verifiers is equal to \texttt{dataVerifierPayout}.
+
 \subsection{Bond logic}\label{subsec:implementation-bond}
-I
+The bond, as described in Section~\ref{subsec:proto-bond-model}, is useful to discourage dishonest behaviors, such as a sender who submits invalid data or a verifier that votes incorrectly.
+The bond implementation lives in \texttt{PrivacyFirstContract}, and it is kept in the second version of the contract.
+
+In the SDK classes, the \lstinline{senderPayBond} and \lstinline{verifierPayBond} smart contract functions are called in the \lstinline{payBond} methods, which are called in \lstinline{setup} methods, for both actors.
+For senders and verifiers, the bond deducted per action is \lstinline{dataSenderBondPerData} for senders and \lstinline{dataVerifierBondPerData} for verifiers, both described in Table~\ref{tab:params-rewards}.
+The total amount of bond to supply is calculated in the constructor as shown in Listing~\ref{lst:proto-implementation-token-supply-bond}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={DST token to supply as bond for senders and verifiers},
+    label={lst:proto-implementation-token-supply-bond}]
+//...
+_requiredSenderBond =
+  _config.needs.maxDataPerSender *
+  _config.rewardConfig.dataSenderBondPerData;
+_requiredVerifierBond =
+  _config.needs.maxDataPerVerifierPerBond *
+  _config.rewardConfig.dataVerifierBondPerData;
+//...
+\end{lstlisting}
+
+Senders cannot pay bond twice because the number of DST token to supply to the contract is enough only for the \lstinline{maxDataPerSender} parameter, described in Table~\ref{tab:params-needs}.
+The Listing~\ref{lst:proto-implementation-sender-pay-bond-function} shows the code of the \lstinline{senderPayBond} function, which execute checks whether the sender already paid a bond and registers the payment.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Smart contract's \lstinline{senderPayBond} function},
+    label={lst:proto-implementation-sender-pay-bond-function}]
+function senderPayBond() external {
+  require(_senders[msg.sender], "Not a sender");
+  require(!_senderInformation[msg.sender].bondPaid,
+    "Bond already paid");
+  _dstContract.transferFrom(msg.sender, address(this), _requiredSenderBond);
+  _senderSupplyBond = _senderSupplyBond + _requiredSenderBond
+  _senderInformation[msg.sender].bondBalance = _requiredSenderBond;
+  _senderInformation[msg.sender].bondPaid = true;
+}
+\end{lstlisting}
+
+Verifiers can refill their bond for this reason, there are no checks in the \lstinline{verifierPayBond} function, whose code is shown in Listing~\ref{lst:proto-implementation-verifier-pay-bond-function}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Smart contract's \lstinline{verifierPayBond} function},
+    label={lst:proto-implementation-verifier-pay-bond-function}]
+function verifierPayBond() external {
+  require(_verifiers[msg.sender], "Not a verifier");
+  _dstContract.transferFrom(msg.sender, address(this), _requiredVerifierBond);
+  _verifierSupplyBond = _verifierSupplyBond + _requiredVerifierBond;
+  _verifierInformation[msg.sender].bondBalance =
+    _verifierInformation[msg.sender].bondBalance +
+    _requiredVerifierBond;
+}
+\end{lstlisting}
+
+The bond balance is deducted when Sender and Verifier perform an action that could lead to misbehavior.
+Senders do this when they publish the CID of the data they send, and verifiers do this when they request verification of a piece of data and it is found.
+Both pieces of code that handle this logic are shown in Listing~\ref{lst:proto-implementation-bond-deducted}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Bond deducted from sender and verifier balance},
+    label={lst:proto-implementation-bond-deducted}]
+//Senders
+function publishIpfsCid(
+    bytes calldata encryptedCid,
+    GlobalPosition calldata position
+) external virtual {
+  // ...
+  unchecked {
+    _senderInformation[msg.sender].bondBalance =
+      _senderInformation[msg.sender].bondBalance -
+      _config.rewardConfig.dataSenderBondPerData;
+  }
+  // ...
+}
+
+//Verifiers
+function requestAuthToVerify() external {
+  // ...
+  unchecked {
+  _verifierInformation[msg.sender].bondBalance =
+    _verifierInformation[msg.sender].bondBalance -
+    _config.rewardConfig.dataVerifierBondPerData;
+  }
+  // ...
+}
+\end{lstlisting}
+
+If the actor acts honestly, the reward and the bond are transferred together to avoid multiple transfers.
+Otherwise, the bond is lost and no reward is granted.
+The total payout calculation is shown in Listing~\ref{lst:proto-implementation-total-actor-pay}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Total payout calculation},
+    label={lst:proto-implementation-total-actor-pay}]
+// For senders
+uint256 total = _config.rewardConfig.dataSenderPayout + _config.rewardConfig.dataSenderBondPerData;
+
+// For verifiers
+uint256 total = _config.rewardConfig.dataVerifierPayout + _config.rewardConfig.dataVerifierBondPerData;
+
+// For both
+_dstContract.transfer(slot.verifier, total);
+\end{lstlisting}
+
 \section{Extended protocol}\label{sec:implementation-extended-protocol}
 D'
 \subsection{Extended verifier enrollment}\label{subsec:extended-protocol-extended-verifier-enrollment}
@@ -714,7 +889,7 @@ E'''
 \section{Gas optimization}\label{sec:implementation-gas-optimization}
 % TODO: RICONTROLLARE
 The data structure is based on swap-and-pop using index mapping, the result is unordered set, but it is gas-efficient and useful for this use case, because the verification order is not critical.
-The Listing~\ref{lst:proto-implementation-pfc-data-pending} shows how the data structure is implemented, how the data are insert and removed from it.
+Listing~\ref{lst:proto-implementation-pfc-data-pending} shows how the data structure is implemented, how the data are insert and removed from it.
 The usage is shown in Listing~\ref{lst:proto-implementation-pfc-request-auth-to-verify}, all the operations have $O(1)$ computational cost, an example of \lstinline{_addToPending} function usage is shown in Listing~\ref{lst:proto-implementation-publish-ipfs-cid}.
 
 \begin{lstlisting}[
