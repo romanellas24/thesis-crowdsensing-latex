@@ -1021,23 +1021,120 @@ dataId: number): Promise<void> {
 
 \end{lstlisting}
 
-
-
 \subsection{Verifier additional penalties}\label{subsec:extended-protocol-verifier-additional-penalties}
-E''
+The implementation of additional penalties for verifiers comes from the weakness of bond system if a verifier votes wrong, as described in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+For this reason two new functions have been included: \lstinline{_recordCorrectVote} and \lstinline{_recordWrongVote}, both in Listing~\ref{lst:proto-implementation-verifier-additional-penalities}.
+
+The functions are called according to the verification process result, the function \lstinline{_recordCorrectVote} counts how many correct votes have been cast.
+The counting process starts if the verifier made a mistake in a previous voting process, in this case the smart contract counts how many good votes are registered towards \lstinline{pardonWrongVoteAfterRightVotes} described in Table~\ref{tab:appendix-a-params-novel}.
+On \lstinline{pardonWrongVoteAfterRightVotes} votes, a wrong vote is pardoned.
+If the parameter is $0$ then no pardon system is implemented.
+
+The \lstinline{_recordWrongVote} function registers a wrong vote, once the wrong vote count reaches \lstinline{kickVerifierAfterWrongVotes}(described in Table~\ref{tab:appendix-a-params-novel}), the verifier is automatically kicked.
+If \lstinline{kickVerifierAfterWrongVotes} is $0$, then no auto-kick system is enabled and this feature is disabled.
+
+The \lstinline{_kickVerifier} function handles the kick process, transferring the remaining bond to the kicked verifier.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} \lstinline{_recordCorrectVote}, \lstinline{_recordWrongVote} and \lstinline{_kickVerifier} functions},
+    label={lst:proto-implementation-verifier-additional-penalities}]
+function _recordCorrectVote(address verifier) internal {
+    uint256 pardon = _novelParams.pardonWrongVoteAfterRightVotes;
+    if (pardon == 0 || _wrongVotes[verifier] == 0) return;
+
+    _rightVotesAccumulator[verifier]++;
+    if (_rightVotesAccumulator[verifier] >= pardon) {
+        _wrongVotes[verifier]--;
+        _rightVotesAccumulator[verifier] = 0;
+    }
+}
+
+function _recordWrongVote(address verifier) internal {
+    _wrongVotes[verifier]++;
+    uint256 kick = _novelParams.kickVerifierAfterWrongVotes;
+    if (kick > 0 && _wrongVotes[verifier] >= kick) {
+        _kickVerifier(verifier);
+        emit VerifierKicked(verifier);
+    }
+}
+
+function _kickVerifier(address verifier) internal {
+    uint256 bond = _verifierInformation[verifier].bondBalance;
+    if (bond > 0) {
+        unchecked { _verifierSupplyBond -= bond; }
+        _verifierInformation[verifier].bondBalance = 0;
+        _dstContract.transfer(verifier, bond);
+    }
+    if (_verifierInformation[verifier].isVerifying) {
+        uint256 dataId = _verifierInformation[verifier].verifyingData;
+        (uint8 slotIndex, bool found) = _getVerifierSlotIndex(dataId, verifier);
+        if (found) _removeVerifierFromData(dataId, slotIndex);
+        _makeVerifierAbleToOperate(verifier);
+    }
+    _verifiers[verifier] = false;
+}
+\end{lstlisting}
+
+The campaign initiator can also provide the manual kicking of a certain verifier calling the \lstinline{kickVerifier} function shown in Listing~\ref{lst:proto-implementation-verifier-manual-kick}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} public \lstinline{kickVerifier} function},
+    label={lst:proto-implementation-verifier-manual-kick}]
+function kickVerifier(address verifier) external {
+    require(msg.sender == _owner, "Not the owner");
+    require(_verifiers[verifier], "Not a verifier");
+    _kickVerifier(verifier);
+    emit VerifierKicked(verifier);
+}
+\end{lstlisting}
+
+
 \subsection{Introducing geographical incentives}\label{subsec:extended-protocol-introducing-geographical-incentives}
-E'''
+Geographical incentives, described in Section~\ref{subsec:security-analysis-issues-unused-geography}, are introduced to cover areas with a lower presence of people in the campaign.
+
+For this reason, when a sender \texttt{S} sends a datum, they can expect a lower payout if the datum is in a densely covered area.
+The decay function, based on how many data are in a chunk (expressed by factor $alpha$, evaluated using Equation~\ref{eq:proto-design-define-alpha-ratio}) is shown in Figure~\ref{fig:reward-decay-curve}.
+
+The smart contract uses the babylonian square root formula, as shown in Listing~\ref{lst:proto-implementation-geo-incentives}.
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} \lstinline{_computeDecayedReward} function},
+    label={lst:proto-implementation-geo-incentives}]
+function _computeDecayedReward(uint256 countBeforeSubmission) internal view returns (uint256) {
+  uint256 maxPerChunk = _config.needs.maximumDataPerChunk;
+
+  if (!_novelParams.rewardDecayEnabled || maxPerChunk == 0)
+    return _config.rewardConfig.dataSenderPayout;
+
+  uint256 remaining = maxPerChunk - countBeforeSubmission;
+  uint256 ratio = remaining * SCALE / maxPerChunk;
+
+  uint256 k = _novelParams.rewardDecayFactor;
+  for (uint256 i = 0; i < k;) {
+    ratio = _sqrt(ratio * SCALE);
+    unchecked { i++; }
+  }
+
+  return _config.rewardConfig.dataSenderPayout * ratio / SCALE;
+}
+\end{lstlisting}
+
 \section{Gas optimization}\label{sec:implementation-gas-optimization}
-% TODO: RICONTROLLARE
-The data structure is based on swap-and-pop using index mapping, the result is unordered set, but it is gas-efficient and useful for this use case, because the verification order is not critical.
-Listing~\ref{lst:proto-implementation-pfc-data-pending} shows how the data structure is implemented, how the data are insert and removed from it.
+Gas is the unit measuring computational effort on the Ethereum blockchain; the aim is to minimize its consumption.
+
+For this reason, as shown before, the bond and reward payout are combined in a single transfer, but another technique is used to avoid high gas usage: the pending data to verify queue is based on swap-and-pop mechanism.
+
+The data structure is based on swap-and-pop using index mapping, the result is an unordered set, but it is gas-efficient and useful for this use case, because the verification order is not critical.
+Listing~\ref{lst:proto-implementation-pfc-data-pending} shows how the data structure is implemented, how data are inserted into and removed from it.
 The usage is shown in Listing~\ref{lst:proto-implementation-pfc-request-auth-to-verify}, all the operations have $O(1)$ computational cost, an example of \lstinline{_addToPending} function usage is shown in Listing~\ref{lst:proto-implementation-publish-ipfs-cid}.
 
 \begin{lstlisting}[
     language=solidity,
     caption={Gas-optimized pendingData unordered set implementation},
     label={lst:proto-implementation-pfc-data-pending}]
-//Ausiliary data structures
+//Auxiliary data structures
 uint256[] internal _pendingDataIds;
 mapping(uint256 => uint256) internal _pendingIndex;
 
@@ -1057,5 +1154,3 @@ function _removeFromPending(uint256 dataId) internal {
     delete _pendingIndex[dataId];
 }
 \end{lstlisting}
-\section{Contract lifecycle and state transitions}\label{sec:implementation-lifecycle}
-M
