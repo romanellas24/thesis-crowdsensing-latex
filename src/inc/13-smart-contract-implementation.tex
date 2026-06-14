@@ -877,11 +877,152 @@ _dstContract.transfer(slot.verifier, total);
 \end{lstlisting}
 
 \section{Extended protocol}\label{sec:implementation-extended-protocol}
-D'
+In this section, all the different behaviors of \texttt{PrivacySecondContract} are described.
+All the changes have been made according to Section~\ref{sec:addressing-issues}.
+
+Sections~\ref{subsec:extended-protocol-extended-verifier-enrollment} and~\ref{subsec:extended-protocol-extended-verification-phase}
+explain how the principle of least privilege~\cite{saltzer1975protection} is enforced, as discussed in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+
 \subsection{Extended verifier enrollment}\label{subsec:extended-protocol-extended-verifier-enrollment}
-E
-\subsection{Extended data submission}\label{subsec:extended-protocol-extended-data-submission}
-E'
+In \texttt{PFC}, as described in Section~\ref{subsec:implementation-verifier-enrollment}, all verifiers receive $K_{dec}$ on enrollment and this introduces the vulnerability exploited by the attack described in Section~\ref{subsec:security-analysis-issues-verifier-attack} exploits.
+Addressing this vulnerability is straightforward: create a key pair per data $(KD_{enc},KD_{dec})$ and deliver $KD_{dec}$ only when the verifier needs it to decrypt and verify the assigned data.
+For this reason, in the \texttt{PSC} enrollment phase no key is delivered.
+
+Listing~\ref{lst:proto-implementation-pfs-handle-verifier-enrollment} shows how the event handler for verifier enrollment phase is overridden and how an empty string is passed as placeholder for the key to preserve ABI compatibility with \texttt{PFC}, the Listing also shows how the public keys are stored in a map to encrypt $KD_{dec}$ when the verifier is elected in the verification phase.
+In addition, Listing~\ref{lst:proto-implementation-pfs-verifier-decryption-key-pub} shows that at the end of the function the \texttt{VerifierEnrolled} event is emitted, instead of \texttt{VerifierDecryptionKeyReady}, which is unused in \texttt{PSC}.
+
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{B}'s \texttt{handleVerifierEnrollment} method in \texttt{OPS}},
+    label={lst:proto-implementation-pfs-handle-verifier-enrollment}
+]
+override async handleVerifierEnrollment(
+    verifierAddress: string,
+    encryptedPubKeyJson: string,
+): Promise<void> {
+    const bundle = JSON.parse(encryptedPubKeyJson);
+    const verifierPubKey = this.cipher.decryptStringHybrid(this.keys.privateKey, bundle);
+    this.verifierPublicKeys.set(verifierAddress, verifierPubKey); //Store verifiers keys
+
+    await this.contract
+        .connect(this.signer)
+        .publishVerifierDecryptionKey(verifierAddress, "");
+}
+
+\end{lstlisting}
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} publishVerifierDecryptionKey overridden function},
+    label={lst:proto-implementation-pfs-verifier-decryption-key-pub}]
+function publishVerifierDecryptionKey(address verifier, string calldata) public override {
+    require(_campaignOpen, "Campaign is closed");
+    require(msg.sender == _owner, "Not the owner");
+    _verifiers[verifier] = true;
+    _verifierInformation[verifier] = VerifierInformation({
+        lastVerified: 0,
+        hasVerified: false,
+        verifyingData: 0,
+        isVerifying: false,
+        bondBalance: 0
+    });
+    delete _verifierEnrolledRequest[verifier];
+    emit VerifierEnrolled(verifier);
+}
+\end{lstlisting}
+
+\subsection{Extended verification phase}\label{subsec:extended-protocol-extended-verification-phase}
+The verification phase in \texttt{PSC} is the phase that delivers $KD_{dec}$ to them.
+Before the Verifier election and insertion in verify queue, in this protocol, the campaign initiator has to create a key pair per data $(KD_{enc},KD_{dec})$.
+Since senders \texttt{S} have received $K_{enc}$ in enrollment phase (Section~\ref{subsec:implementation-sender-enrollment}), a trusted third party is required to generate and manage the key pair; this role is fulfilled by the campaign initiator.
+
+In \texttt{PSC}, the \texttt{publishIpfsCid} function is overridden, the change that is relevant to this phase is the emission of \texttt{DataRequiredVerificationKeyGeneration} event, which is listened by \texttt{B}'s SDK.
+The event handler is shown in Listing~\ref{lst:proto-implementation-ops-handle-data-verification-exchange-keys}, the called smart contract function is shown in Listing~\ref{lst:proto-implementation-psc-verification-key-ready}.
+The called function emits the \texttt{DataVerificationRequestedEvent} which is the same event emitted by \texttt{PFC}.
+
+After the verification authorization request, which follows the same flow as in \texttt{PFC}, \texttt{\_emitVerifierElected} is invoked, that function is overridden in \texttt{PSC}, the code of both functions is shown in Listing~\ref{lst:proto-implementation-emit-verifier-elected}.
+
+
+
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{B}'s \texttt{handleDataRequiresKey} method in \texttt{OPS}},
+    label={lst:proto-implementation-ops-handle-data-verification-exchange-keys}
+]
+async handleDataRequiresKey(dataId: number, encryptedCid: string): Promise<void> {
+    this.encryptedCidCache.set(dataId, encryptedCid);
+
+    await this.contract
+        .connect(this.signer)
+        .notifyVerificationKeyReady(dataId);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[
+language=solidity,
+caption={\texttt{PSC} \lstinline{notifyVerificationKeyReady} function},
+label={lst:proto-implementation-psc-verification-key-ready}]
+function notifyVerificationKeyReady(uint256 dataId) external{
+  require(msg.sender == _owner, "Not the owner");
+  require(_campaignOpen, "Campaign is closed");
+  require(_awaitingKeyGeneration[dataId],
+    "Data not awaiting key generation");
+  delete _awaitingKeyGeneration[dataId];
+  _addToPending(dataId);
+  emit DataVerificationRequestedEvent(dataId);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PFC} and \texttt{PSC} \lstinline{_emitVerifierElected} implementations"},
+    label={lst:proto-implementation-emit-verifier-elected}]
+//PrivacyFirstContract
+function _emitVerifierElected(address verifier, uint256 dataId, uint8 slotIndex) internal virtual {
+  emit VerifierElected(verifier, dataId, slotIndex, _dataEntries[dataId].encryptedCid);
+}
+
+//PrivacySecondContract
+function _emitVerifierElected(address verifier, uint256 dataId, uint8 slotIndex) internal override {
+  delete _bundleDelivered[dataId][slotIndex];
+  emit VerifierElectedForData(verifier, dataId);
+}
+\end{lstlisting}
+
+For \texttt{PSC}, the function shown in Listing~\ref{lst:proto-implementation-emit-verifier-elected} emits the \texttt{VerifierElectedForData} event.
+Listing~\ref{lst:proto-implementation-ops-handle-verifier-elected} shows how the campaign initiator handles the event.
+
+
+The smart contract's function \lstinline{deliverVerificationBundle} performs check and then emits \texttt{VerifierVerificationBundleReady} event, which is listened by verifiers and contains the verification bundle.
+Once the verifier receives the bundle, they can submit the verification result as in \texttt{PFC}.
+
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{B}'s \texttt{handleVerifierElected} method in \texttt{OPS}},
+    label={lst:proto-implementation-ops-handle-verifier-elected}
+]
+async handleVerifierElected(verifier: string,
+dataId: number): Promise<void> {
+  const pkV = this.verifierPublicKeys.get(verifier);
+  if (!pkV) throw new Error(`...`);
+
+  const encryptedCid = this.encryptedCidCache.get(dataId);
+  if (!encryptedCid) throw new Error(`...`);
+
+  const bundleContent = JSON.stringify({encryptedCid,
+    kdec: this.encryptionKeys.decryptionKey});
+
+  const bundleEnvelope = this.cipher.encryptStringHybrid(pkV, bundleContent);
+  const bundleBytes = toUtf8Bytes(JSON.stringify(bundleEnvelope));
+
+  await this.contract
+    .connect(this.signer)
+    .deliverVerificationBundle(dataId, verifier,bundleBytes);
+
+\end{lstlisting}
+
+
+
 \subsection{Verifier additional penalties}\label{subsec:extended-protocol-verifier-additional-penalties}
 E''
 \subsection{Introducing geographical incentives}\label{subsec:extended-protocol-introducing-geographical-incentives}
