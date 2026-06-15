@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Make Thesis (FULL)" type="LATEX_RUN_CONFIGURATION" factoryName="LaTeX configuration factory">
     <texify>
-      <compiler>LATEXMK</compiler>
+      <compiler>PDFLATEX</compiler>
       <compiler-path />
       <pdf-viewer>evince</pdf-viewer>
       <require-focus>true</require-focus>
@@ -13,12 +13,11 @@
       <main-file>$PROJECT_DIR$/src/main.tex</main-file>
       <output-path>$PROJECT_DIR$/out</output-path>
       <auxil-path>{projectDir}/auxil</auxil-path>
-      <working-directory>{mainFileParent}</working-directory>
       <compile-twice>false</compile-twice>
       <output-format>PDF</output-format>
       <latex-distribution>TEXLIVE</latex-distribution>
       <has-been-run>true</has-been-run>
-      <bib-run-config>[]</bib-run-config>
+      <bib-run-config>[BibTeX.main bibliography]</bib-run-config>
       <makeindex-run-config>[]</makeindex-run-config>
     </texify>
     <method v="2" />

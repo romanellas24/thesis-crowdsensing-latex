@@ -1,6 +1,1156 @@
 \chapter{Smart contract implementation}\label{ch:implementation}
-\section{Architecture}\label{sec:architecture}
-\section{Smart contract functions}\label{sec:sc-functions}
-\section{Economic model}\label{sec:economic-model}
-\section{Events}\label{sec:events}
-\section{Lifecycle}\label{sec:lifecycle}
+In the previous chapter the protocol was explained, some issues are identified, and mitigation strategies are proposed for the most critical ones.
+This chapter describes how the entire protocol is implemented.
+The development environment is made of Solidity on Ethereum~\cite{ethereum} and Hardhat as the development and testing framework.
+In addition, the chapter also describes how \texttt{PrivacyFirstContract} and its extension, \texttt{PrivacySecondContract} interacts and which functions are overridden and the motivation behind every choice.
+
+\section{Architecture}\label{sec:implementation-architecture}
+The architecture is divided between on-chain operations and off chain ones, this distinction exists
+because a lot of actions are not executable on the blockchain, like IPFS upload/download and ciphers
+usage are not permitted on smart contacts due to the non-deterministic nature of operations such as encryption~\cite{wood2014ethereum}.
+The off-chain operations are encapsulated in a SDK that allows actors to interact with the protocol without dealing directly with blockchain primitives.
+The structure is composed by two contracts: the base protocol inspired to~\cite{bedogni2024crowdsensing} and another one that extends the base protocol with the mechanisms proposed in Section~\ref{sec:addressing-issues}.
+
+\subsection{Contract hierarchy}\label{subsec:implementation-contract-hierarchy}
+The \texttt{PrivacySecondContract} extends \texttt{PrivacyFirstContract}, reusing its core logic without modification.
+The functionalities not covered by Section~\ref{sec:addressing-issues}, such as sender enrollment, bond system, majority consensus, and lifecycle are inherited without modification.
+An overview of functions and more representative fields are shown in Figure~\ref{fig:proto-implementation-contract-hierarchy}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=0.50\textwidth]{diagrams/proto-implementation-contract-hierarchy-out}
+        \caption{Class hierarchy of the two smart contracts}\label{fig:proto-implementation-contract-hierarchy}
+    \end{center}\label{fig:proto-implementation-contract-hierarchy-container}
+\end{figure}
+
+There are four \texttt{internal} functions that have been overridden in the \texttt{PrivacySecondContract} to adapt them to the contract needs.
+
+Since the extended contract needs to delivery verification bundles, to prevent duplicate delivery, a \texttt{\_bundleDelivered} mapping is introduced.
+For this reason, once the bundle is sent the function \texttt{\_emitVerifierElected} is overridden in \texttt{PrivacySecondContract} to reset the delivery state, allowing a new bundle to be delivered if the verifier slot is reassigned.
+This allows the usage of the same location of memory, the delivery of verification bundles is required in order to address the issue of verifiers trust, described in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+
+Since in the Section~\ref{subsec:addressing-issues-geographical-incentive-issue} is described a mechanism to incentive data sensing in heterogeneous geographical areas, it is necessary to change the rewarding system.
+For this reason, the method \texttt{\_rewardSender} is overridden and the only modification made is change the calculation of total payout.
+In the first version of the contract, the reward is always the full base payout, in the novel one, the contract reads the pre-computed reward from storage.
+The effective payout is calculated at the CID publish time, the contract execute the calculus in the \texttt{\_computeDecayedReward} function.
+That function executes $k$ times the sqrt of a value (as shown in equation~\ref{eq:proto-design-reward-determination}), in \textit{O(log n)} time using the babylonian method~\cite{kosheleva2009babylonian}, to execute this operation, all values are scaled by a factor of \texttt{1E18} since the EVM, as noted in Section~\ref{sec:chunking-system}, is unable to execute floating point calculus.
+
+The problem of missing verifiers penalties, in addition to bond loss, is discussed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+To address this issue, is required to modify how the smart contract collects the verifiers responses.
+For this reason, the functions \texttt{\_rewardCorrectVerifiers} and \texttt{\_tryRewardVerifier} are modified and the responses are saved in mappings that keeps the count of correct votes and wrong ones.
+These mappings are required to enforce the kick of systematically wrong voters, as proposed in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+
+The \texttt{PrivacySecondContract} overrides also public functions; the function used to publish decryption key (\texttt{publishVerifierDecryptionKey}) in the \texttt{PrivacyFirstContract} publishes the decryption key through the VerifierEnrolled event, using a key shared among all enrolled verifiers.
+In the novel contract, the function is overridden and publish the same event without the key, because, in order to avoid a single decryption key shared among all the verifiers, like described in~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+For these reasons, the function \texttt{publishIpfsCid}, is overridden and instead of adding the data in the pending data structure, the data entry requires that \texttt{B} to generate a per-data key pair ($KD_{enc}$, $KD_{dec}$), after which, \texttt{B} calls \texttt{notifyVerificationKeyReady} and the smart contract adds the data to pending data structure.
+The novel event \texttt{VerifierElectedForData} notifies \texttt{B} that a verifier has been elected, upon which \texttt{B} delivers a verification bundle via \texttt{deliverVerificationBundle}.
+Then a \texttt{VerifierVerificationBundleReady} is emitted and the verifier can finally calculate and submit the verification result using \texttt{submitVerifyResult} overridden function that checks the verification bundle delivery.
+
+In addition, two new functions are introduced: \texttt{getExpectedSenderReward} and \texttt{kickVerifier}, the first one is informative and useful for users to understand which payout they will receive if they send data for a specific chunk in that moment.
+The second one can be used from by campaign initiator \texttt{B} to exclude a verifier from the crowdsensing campaign.
+In this case the verifier's bond is returned, as the exclusion from the campaign already constitutes a sufficient penalty, consistently with the design choice described in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+
+A description of all overridden functions between the contracts is shown in Table~\ref{tab:contract-implementation-hierarchy-overrides}
+
+\begin{table}
+    \centering
+    \begin{tabular}{|p{4cm}|p{3.5cm}|p{3.5cm}|p{2.5cm}|}
+        \hline
+        \textbf{Function} & \textbf{PFC} & \textbf{PSC} & \textbf{Reason} \\
+        \hline
+        {\texttt{publishVerifier-\newline DecryptionKey}}
+        & Publishes decryption key on-chain via \texttt{VerifierEnrolled}
+        & Emits \texttt{VerifierEnrolled} without key; key is generated off-chain
+        & Trusted verifier flow (\ref{subsec:addressing-issues-trusted-verifier-issue}) \\
+        \hline
+        \texttt{publishIpfsCid}
+        & Adds data to pending; reward is fixed base payout
+        & Stores data awaiting key generation; computes decayed reward
+        & Trusted verifier flow and reward decay (\ref{subsec:addressing-issues-trusted-verifier-issue},~\ref{subsec:addressing-issues-geographical-incentive-issue}) \\
+        \hline
+        \texttt{submitVerifyResult}
+        & No prerequisite on bundle delivery
+        & Requires \texttt{deliver-\newline Verification-\newline Bundle} to be called first
+        & Trusted verifier flow (\ref{subsec:addressing-issues-trusted-verifier-issue}) \\
+        \hline
+        \texttt{\_emitVerifier-\newline Elected}
+        & Emits election event and assigns slot
+        & Additionally resets \texttt{\_bundle-\newline Delivered} flag
+        & Allows bundle re-delivery on slot reassignment \\
+        \hline
+        \texttt{\_rewardSender}
+        & Pays fixed base payout
+        & Reads pre-computed reward from \newline \texttt{\_computedSender-\newline Reward}
+        & Reward decay (\ref{subsec:addressing-issues-geographical-incentive-issue}) \\
+        \hline
+        \texttt{\_rewardCorrect-\newline Verifiers} \newline \texttt{\_tryRewardVerifier}
+        & Distributes rewards based on majority
+        & Additionally records correct and wrong votes per verifier
+        & Verifier penalties (\ref{subsec:addressing-issues-missing-verifier-penalties}) \\
+        \hline
+    \end{tabular}
+    \caption{Overridden functions between \texttt{PrivacyFirstContract} (PFC) and \texttt{PrivacySecondContract} (PSC)}
+    \label{tab:contract-implementation-hierarchy-overrides}
+\end{table}
+
+
+\subsection{SDK layer}\label{subsec:implementation-sdk-layer}
+The SDK layer is responsible for all off-chain operations that the smart contracts cannot or should not perform.
+All the cryptographic operations cannot be executed on-chain because the smart contracts are deterministic, so, in the blockchain environment can exist an encryption scheme that is deterministic, because EVM is deterministic~\cite{wood2014ethereum}, so:
+\begin{equation}
+    \texttt{ENC}_k(m) = c = \texttt{ENC}_k(m). \quad \forall m
+    \label{eq:encryption-sceheme-deterministic-formula}
+\end{equation}
+The equation~\ref{eq:encryption-sceheme-deterministic-formula} shows that given the same message $m$, the same ciphertext  $c$ is always produced.
+Deterministic encryption scheme has been shown to be insecure~\cite{katz2020introduction} because if a sender wants to send to a specific receiver the same message two times an adversary $\mathcal{A}$ can understand that the message $m$ was submitted twice because they have seen $c$ flow two times on the network.
+Secure schemes such as RSA-OAEP and AES-GCM require a fresh random value per invocation~\cite{rfc8017, nist-sp-800-38d}; the EVM, having no trusted randomness source, cannot provide this.
+In addition, all the data sent to the smart contract, including the function call arguments, are visible and stored in the blockchain, so, if in a certain use-case is acceptable that $\texttt{ENC}_k$ is deterministic and the encryption were performed within the smart contract, the content of $m$ is in any case stored and visible over the blockchain.
+Furthermore, performing cryptographic operations off-chain avoids the gas overhead that on-chain execution would introduce.
+
+For this reason the SDK must be executed by the protocol actors.
+In addition, the proposed SDK exposes an interface that makes it easy for users to parrfc8017ticipate in the campaign and guarantees the correct execution of operations.
+
+The UML class diagram of the SDK layer is shown in Figure~\ref{fig:proto-implementation-sdk}.
+\begin{figure}
+    \begin{center}
+        \includegraphics[width=1\textwidth]{diagrams/proto-implementation-sdk-out}
+        \caption{UML class diagram of SDK. The PrivacyFirstContract (PFC) defines the base facades together the template method hooks, the PrivacySecondContract (PSC) ovverddies the hooks to implement extensions described in Section~\ref{sec:addressing-issues}}\label{fig:proto-implementation-sdk}
+    \end{center}\label{fig:proto-implementation-sdk-container}
+\end{figure}
+
+In the protocol there are, as before, three types of actors, described in Section~\ref{sec:actors}.
+In the SDK architecture, there are three classes, once for each type of Actor.
+
+The campaign initiator \texttt{B} can use two classes, \texttt{OwnerPrivacyFirst} and \texttt{OwnerPrivacySecond}, respectively for the first and the second version of the protocol.
+Through the \lstinline{OwnerPrivacyFirst.setup} method, \texttt{B} can deposit the initial token supply and register all the listeners using \lstinline{OwnerPrivacyFirst.startListening}.
+For the \texttt{OwnerPrivacySecond} contract, the method \lstinline{startListening} is overridden enabling the registration of listeners for the new events.
+With event listeners \texttt{B} is able to handle enrollments automatically.
+
+The sender \texttt{S} can use two classes, \texttt{SenderPrivacyFirst} and \texttt{SenderPrivacySecond}.
+The \lstinline{SenderPrivacyFirst.setup} method allows \texttt{S} to enroll to the campaign and pay bond automatically, in addition, the method \lstinline{SenderPrivacyFirst.publishData} automatically handles the encryption and publishes the ciphered CID.
+The \texttt{SenderPrivacySecond} was introduced only to pass the correct type to the parametric variable \texttt{C}.
+Since Hardhat generates contract types from the ABI rather than from a shared base class, \texttt{SenderPrivacySecond} does not extend \texttt{SenderPrivacyFirst}; however, TypeScript's structural typing allows it to satisfy the type parameter \texttt{C}, as both classes expose the same sender-facing interface.
+
+The verifier \texttt{V} can use two classes, \texttt{VerifierPrivacyFirst} and \texttt{VerifierPrivacySecond}.
+The \lstinline{VerifierPrivacyFirst.setup} method allows the verifier to enroll to the campaign and automatically handle the exchange of $K_{\text{dec}}$ and pay bond.
+The novel class \texttt{VerifierPrivacySecond} overrides the \lstinline{enroll} method, called by \lstinline{setup}, and also overrides the \lstinline{requestAuthToVerify} to listen for the new event \texttt{VerifierElectedForData}.
+
+\subsection{Off-chain cryptographic utility}\label{subsec:implementation-offchain-encryptions}
+The cryptographic utility follows a hybrid scheme: each CID is encrypted with a freshly generated symmetric key, and that key is in turn encrypted under the recipient's public key.
+Only the encrypted CIDs travel on the blockchain and the auxiliary public channel.
+
+The symmetric layer uses \texttt{AES-256-GCM}, a NIST-recommended authenticated encryption scheme~\cite{nist-sp-800-38d} that provides both confidentiality (via AES in CTR mode) and integrity/authenticity (via the GHASH authentication tag) in a single pass.
+A new symmetric key is sampled at every interaction, so compromise of one session does not affect any other.
+
+The symmetric key is then wrapped with \texttt{RSA-OAEP}, the standard padding scheme for RSA encryption defined in PKCS\#1~v2.2~\cite{rfc8017}.
+Its predecessor, PKCS\#1~v1.5, is vulnerable to chosen-ciphertext attacks, which OAEP addresses by introducing randomized padding.
+
+Finally, the proposed SDK demonstrates that the protocol is fully implementable by each actor.
+This is not a production-ready library but a reference implementation; as such, the keys live in the program's memory, for this reason, keys are not protected by a hardware security module.
+
+\section{Protocol phases implementation}\label{sec:implementation-protocol-phases}
+This section discusses the main implementation decisions.
+All implementation choices are made in accordance with the protocol design described in Sections~\ref{sec:chunking-system},~\ref{sec:proto-workflow},~\ref{sec:incentive-mechanisms},~\ref{sec:security-analysis-issues} and ~\ref{sec:addressing-issues}.
+
+Since the \texttt{PrivacySecondContract} (\texttt{PSC}) is an extension of \texttt{PrivacyFirstContract} (\texttt{PFC}), both contracts are presented.
+New and overridden methods are highlighted to show the extensions introduced, while methods inherited unchanged from the base protocol are presented for clarity.
+
+
+\subsection{Initialization and deployment}\label{subsec:implementation-protocol-init}
+The campaign initiator \texttt{B} generates their own key pair $(PK_B, SK_B)$ using the \texttt{cipher} in the SDK.
+\begin{lstlisting}[
+    language=typescript,
+    caption={B's key pair generation}]
+// ...
+const ownerKeys = cipher.generateKeyPair();
+// ...
+\end{lstlisting}
+Where \lstinline{cipher} is an object used for all the off-chain cryptographic operations.
+
+Afterward, \texttt{B} executes the contract deployment with the following code:
+
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{PrivacyContract} deployment}]
+const privacyContract = <CF extends ContractFactory>.deploy(
+    ownerKeys.publicKey,
+    contractConfiguration,
+    dataSentTokenAddress,
+    defaultNovelParams,
+);
+\end{lstlisting}
+Where \lstinline{CF} is a contract factory that can be \texttt{PrivacyFirstContract\_\_factory} or \texttt{PrivacySecondContract\_\_factory}, based on which version to deploy;
+the \lstinline{ownerKeys.publicKey} is the \texttt{B}'s public key, which is required by the contract to settle it to verifiers and senders;
+the contract configuration object (\lstinline{contractConfiguration}) is described in Appendix~\ref{ch:appendix-a-parameters}; the \lstinline{dataSentTokenAddress} is also required for approving transfers from the contract account to the actors' accounts.
+Finally, the \lstinline{defaultNovelParams} object is required only for the \texttt{PSC} deployment.
+
+On the contract side, upon deployment, the constructor is executed and all configuration checks are performed
+\begin{lstlisting}[language=solidity,
+    caption={\texttt{PrivacyFirstContract} constructor}, label={lst:privacy-first-contract-constructor}]
+constructor(string memory ownerPubKey, Config memory config, address dstContractAddress) {
+  require(config.rewardConfig.dataSenderPayout
+    > config.rewardConfig.dataSenderBondPerData,
+    "The senders payout isn't greater than senders bond");
+  require(config.rewardConfig.dataVerifierPayout
+   > config.rewardConfig.dataVerifierBondPerData,
+   "The verifiers payout isn't greater than verifiers bond");
+  require(config.originCoordinates.isValid(),
+    "Origin coordinates should be valid");
+  require(config.needs.checksRequired % 2 == 1,
+    "Checks must be odd");
+  require(config.chunkConfig.chunk4Side > 0,
+    "chunk4Side must be greater than 0");
+  require(config.chunkConfig.chunkSize > 0,
+    "chunkSize must be greater than 0");
+  require(config.needs.verifierCooldown > 0,
+    "Cooldown should be positive");
+    // setters ...
+}
+\end{lstlisting}
+
+After the deployment, the classes \texttt{OwnerPrivacyFirst} (\texttt{OPF}) or \texttt{OwnerPrivacySecond} (\texttt{OPS}) can be instantiated.
+\begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s constructor, inherited by \texttt{OPS}},label={lst:proto-implementation-opf-constructor}]
+    constructor(signer: HardhatEthersSigner,
+    contract: C,
+    dstToken: DataSentTokenContract,
+    ownerKeys: KeyPair,
+    cipher: CipherProvider) {
+    //setters for all the params above
+    this.encryptionKeys = cipher.generateEncryptionKeys();
+}
+\end{lstlisting}
+
+As shown in Listing~\ref{lst:proto-implementation-opf-constructor} the only business logic implemented by the constructor is the auto-generation of encryption keys.
+Finally, the owner can invoke \lstinline{OwnerPrivacy*.setup} defined in \texttt{OPF} as shown in Listing~\ref{lst:proto-implementation-opf-setup}.
+The \lstinline{payInitialSupply} method automatically handles the supply payout to the contract account; the event listeners are then set up by invoking \lstinline{startListening}.
+
+\begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s setup method, inherited from \texttt{OPS}},label={lst:proto-implementation-opf-setup}]
+async setup() {
+   //...
+   this.payInitialSupply(config.rewardConfig.totalDst);
+   this.startListening();
+   //...
+}
+\end{lstlisting}
+
+The \lstinline{startListening} method is defined in \texttt{OPF} and overridden in \texttt{OPS} to support the additional events in the second version of the protocol, code is shown in Listings~\ref{lst:proto-implementation-opf-start-listening} and~\ref{lst:proto-implementation-ops-start-listening}.
+
+\begin{lstlisting}[language=typescript, caption={\texttt{OPF}'s startListening method},label={lst:proto-implementation-opf-start-listening}]
+startListening(): void {
+//...
+this.contract.on(
+    this.contract.getEvent("SenderEnrolledEvent"),
+    async (sender: string, key: string) => {
+        this.handleSenderEnrollment(sender, key)})
+
+this.contract.on(
+    this.contract.getEvent("VerifierEnrolledEvent"),
+    async (verifier: string, key: string) => {
+       this.handleVerifierEnrollment(verifier, key)})
+
+this.contract.on(
+    this.contract.getEvent("DataVerified"),
+    (dataId: bigint, result: boolean) => {
+    this.handleDataVerificationCompleted(dataId, result)})
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=typescript, caption={\texttt{OPS}'s startListening method, uses the inherited method from parent class},label={lst:proto-implementation-ops-start-listening}]
+override startListening(): void {
+//...
+super.startListening();
+
+this.contract.on(
+    this.contract.getEvent("DataRequiredVerificationKeyGeneration"),
+    async (dataId: bigint, event: any) => {
+        this.handleDataRequiresKey(Number(dataId), event)})
+
+this.contract.on(
+    this.contract.getEvent("VerifierElectedForData"),
+    async (verifier: string, dataId: bigint) => {
+        this.handleVerifierElected(verifier, Number(dataId))})
+}
+\end{lstlisting}
+
+\subsection{Sender enrollment}\label{subsec:implementation-sender-enrollment}
+The interface for the Sender side in both implementations of the protocol is the same.
+For this reason the SDK class \texttt{SenderPrivacySecond} (\texttt{SPS}) has no overridden methods.
+The only role for the class is to give the right contract interface to the superclass.
+
+Class binding implementation is shown in Listings~\ref{lst:proto-implementation-sps-full-implementation} and~\ref{lst:proto-implementation-spf-class-declaration}.
+For this reason, in this section, all methods discussed are defined in class \texttt{SenderPrivacyFirst} (\texttt{SPF}).
+
+\begin{lstlisting}[language=typescript,
+    caption={Full \texttt{SenderPrivacySecond} class implementation},
+    label={lst:proto-implementation-sps-full-implementation}]
+class SenderPrivacySecond
+    extends SenderPrivacyFirst<PrivacySecondContract> {}
+\end{lstlisting}
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{SenderPrivacyFirst} class declaration},
+    label={lst:proto-implementation-spf-class-declaration}]
+class SenderPrivacyFirst
+    <C extends PrivacyFirstContract = PrivacyFirstContract> {
+    //...
+    private readonly contract: C;
+    //...
+    }
+\end{lstlisting}
+
+Before publishing data to IPFS, the sender needs to execute the code shown in Listing~\ref{lst:proto-implementation-sps-class-usage}.
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{SenderPrivacySecond} class usage},
+    label={lst:proto-implementation-sps-class-usage}]
+const sender = new SenderPrivacySecond
+    (_sender, contract, dst, cipher);
+sender.setup();
+\end{lstlisting}
+Where \lstinline{_sender} is HardhatSigner, \lstinline{contract} is a reference to the deployed contract, \lstinline{dst} is the reference to the \texttt{DataSentToken} contract and \lstinline{cipher} is the cipher utility in the SDK.
+
+The constructor generates the sender's key pair $(PK_S, SK_S)$.
+The \lstinline{setup} method calls the enroll method, and the \lstinline{payBond} method that approves the \texttt{DST} transfer to the smart contract, after approval the sender calls the \lstinline{senderPayBond} function of the Smart Contract that completes the transfer and updates the internal balance.
+The \lstinline{enroll} method is implemented as shown in Listing~\ref{lst:proto-implementation-spf-enroll-declaration}
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{SenderPrivacyFirst} enroll method},
+    label={lst:proto-implementation-spf-enroll-declaration}]
+//After SenderEncryptionKeyReady listener subscription
+const ownerPubKey: string = contract.getInitiatorPublicKey();
+const encryptedPK = cipher.encryptStringHybrid(ownerPubKey, keys.publicKey); //encrypt PK_S using PK_B.
+contract.publishEncryptedSenderPublicKey(JSON.stringify(encryptedPK)); //Publish encrypted PK_S
+//wait for key from SenderEncryptionKeyReady emission (will be saved in encryptedKenc)
+kenc = cipher.decryptStringHybrid(keys.privateKey, JSON.parse(encryptedKenc)); //Received K_enc
+\end{lstlisting}
+
+The sender \texttt{S} uses the \lstinline{publishEncryptedSenderPublicKey}, the implementation is shown in Listing~\ref{lst:proto-implementation-pfc-sender-pk-publish}.
+The function emits the \lstinline{SenderEnrolledEvent} event, which is handled by the campaign initiator as shown in Listing~\ref{lst:proto-implementation-opf-start-listening}.
+\begin{lstlisting}[language=solidity,
+    caption={publishEncryptedSenderPublicKey method, implemented in \texttt{PFC} and inherited from \texttt{PSC}},
+    label={lst:proto-implementation-pfc-sender-pk-publish}]
+function publishEncryptedSenderPublicKey(string calldata encryptedPubKey) public {
+  require(_campaignOpen, "Campaign is closed");
+  require(!_senders[msg.sender],"Sender has already joined");
+  emit SenderEnrolledEvent(msg.sender, encryptedPubKey);
+}
+\end{lstlisting}
+
+When \texttt{B} is triggered by the event, their SDK is triggered and the code handler is shown in Listing~\ref{lst:proto-implementation-pfc-owner-sender-enrollment}, basically, the campaign initiator decrypts the ciphertext to get $PK_S$.
+Finally, $K_{enc}$ is encrypted using $PK_S$ and sends it via the Smart Contract to \texttt{S} using \lstinline{publishSenderEncryptionKey}.
+\begin{lstlisting}[language=typescript,
+    caption={\texttt{B}'s callback function for sender key publishing},
+    label={lst:proto-implementation-pfc-owner-sender-enrollment}]
+handleSenderEnrollment(senderAddress: string, encryptedPubKeyJson: string) {
+  const bundle = JSON.parse(encryptedPubKeyJson);
+  const senderPubKey = cipher.decryptStringHybrid(keys.privateKey, bundle);
+  const encryptedKenc = JSON.stringify(
+    cipher.encryptStringHybrid(senderPubKey, encryptionKeys.encryptionKey));
+  contract.publishSenderEncryptionKey(
+    senderAddress, encryptedKenc);
+}
+\end{lstlisting}
+
+The \lstinline{publishSenderEncryptionKey} call completes the registration and creates a struct to store the sender's information.
+Finally, the function emit the SenderEncryptionKeyReady event, which is awaited from the sender, like shown in Listing~\ref{lst:proto-implementation-spf-enroll-declaration}.
+The handler is quite simple, since the \lstinline{SenderEncryptionKeyReady} has two parameters (senderAddress, encryptionKeyCiphertext), if \texttt{S} sees their address in senderAddress the handler is triggered and removed.
+The ciphertext of $K_{enc}$ is returned; the sender then uses $SK_S$ to decrypt and obtain $K_{enc}$.
+
+With this implementation the sender enrollment reflects the design choices made in Section~\ref{subsec:proto-sender-enrollment}.
+
+\subsection{Verifier enrollment}\label{subsec:implementation-verifier-enrollment}
+This Section describes the verifier enrollment phase for the \texttt{PrivacyFirstContract}.
+The extended protocol version is discussed in Sections~\ref{subsec:extended-protocol-extended-verifier-enrollment} and~\ref{subsec:extended-protocol-extended-data-submission} which implement the modifications in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+
+In the \texttt{PrivacyFirstContract} the implementation is very similar to the one realized for senders, shown in Section~\ref{subsec:implementation-sender-enrollment}.
+
+The verifiers can use the \texttt{VerifierPrivacyFirst} (\texttt{VPF}) class to join the crowdsensing campaign.
+The constructor of the class automatically generates $(PK_V, SK_V)$ key pair and require the verifyCallback to execute on every data to check.
+
+After the object initialization, the verifier has to call the \lstinline{setup} method.
+The method calls the \lstinline{enroll} method and \lstinline{payBond}, which handles the bond payment, like the one implemented for the senders.
+The workflow is the same for senders but with different functions to invoke and event to wait for.
+
+The general workflow is the following:
+\begin{enumerate}
+    \item \texttt{V} register a listener for the \lstinline{VerifierDecryptionKeyReady} event;
+    \item \texttt{V} retrieve $PK_B$ which is embedded in the smart contract;
+    \item \texttt{V} encrypt $PK_V$ using $PK_B$ and sends it to the smart contract using the \lstinline{publishEncryptedVerifierPublicKey} function;
+    \item The Smart Contract triggers via \lstinline{VerifierEnrolledEvent} the campaign initiator which is listening for this event as shown in the Listing~\ref{lst:proto-implementation-opf-start-listening};
+    \item \texttt{B} via the \lstinline{handleVerifierEnrollment} handler, encrypts $K_{dec}$ using $PK_V$, used for data decryption during verification;
+    \item \texttt{B} sends the calculated ciphertext to the smart contract using \lstinline{publishVerifierDecryptionKey} which updates the Smart Contract state and the verifier is officially in the campaign, finally, \lstinline{VerifierDecryptionKeyReady} event is emitted;
+    \item \texttt{V} is triggered by the event and get $K_{dec}$
+\end{enumerate}
+
+After these steps the verifier can verify data and start the verification workflow, that will be discussed in Section~\ref{subsec:implementation-verification}.
+
+With this implementation the verifier enrollment reflects the design choices made in Section~\ref{subsec:proto-verifier-enrollment}.
+
+\subsection{Data submission}\label{subsec:implementation-data-submission}
+The data submission is the core phase where the crowdsensing campaign obtains data.
+
+The SDK implementation for the senders is written in \texttt{SenderPrivacyFirst} (\texttt{SPF}) and is shown in Listing~\ref{lst:proto-implementation-spf-sender-publish-data}.
+\begin{lstlisting}[
+language=typescript,
+caption={Sender \lstinline{publishData} method to send data to the campaign},
+label={lst:proto-implementation-spf-sender-publish-data}]
+async publishData(plainCid: string, position: any) {
+if (!this.kenc) throw new Error("Not enrolled - Kenc not available");
+
+const encrypted = this.cipher.encryptStringHybrid(this.kenc, plainCid);
+const cidBytes = toUtf8Bytes(JSON.stringify(encrypted));
+return this.contract.connect(this.signer).publishIpfsCid(cidBytes, position);
+\end{lstlisting}
+
+Basically, the method checks if $K_{enc}$ is available, if not, it throws an error, otherwise, uses $K_{enc}$ to encrypt the CID returned by the IPFS node after uploading the encrypted data, where they have submitted the data and publishes the encrypted CID using the smart contract function \lstinline{publishIpfsCid}.
+
+The function, which is shown in Listing~\ref{lst:proto-implementation-publish-ipfs-cid}, performs a series of checks such as bond availability, maximum data count per chunk and per sender, and geographical area validation.
+If any of these checks fails, then the entire transaction is reverted, but if the data is submitted a struct to store submission information is created and the data index is added to the pending queue, waiting for verification.
+In this phase of the protocol, no action from the campaign initiator is required; the \lstinline{DataVerificationRequestedEvent} event is emitted to notify verifiers that new data is available for verification.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{publishIpfsCid} function implementation},
+    label={lst:proto-implementation-publish-ipfs-cid}]
+
+function publishIpfsCid(bytes calldata encryptedCid, GlobalPosition calldata position) external virtual {
+  require(_campaignOpen, "Campaign is closed");
+  require(_senders[msg.sender], "Only senders allowed...");
+  require(position.isValid(), "Invalid Coordinates");
+  require(_senderInformation[msg.sender].dataSubmitted
+    < _config.needs.maxDataPerSender
+    || _config.needs.maxDataPerSender == 0,
+  "Max data limit reached");
+
+  // if maxDataPerSender == 0 (unlimited), bond check is skipped
+  // since total bond cannot be pre-computed
+  require(_senderInformation[msg.sender].bondBalance
+    >= _config.rewardConfig.dataSenderBondPerData
+    || _config.needs.maxDataPerSender == 0,
+    "Insufficient DST balance in bond");
+
+  PackedPosition memory packed = position.packCoordinates();
+  (uint16 chunkIndex, bool inside) = _getChunkIndex(packed);
+  require(inside, "Outside campaign area");
+  require(_dataPerChunkReceived[chunkIndex]
+    < _config.needs.maximumDataPerChunk
+    || _config.needs.maximumDataPerChunk == 0,
+  "Too many data in this chunk!");
+
+  _dataEntries[_dataCount] = DataEntry({
+    sender: msg.sender,
+    encryptedCid: encryptedCid,
+    status: DataStatus.PENDING,
+    completedChecks: 0,
+    positiveChecks: 0,
+    assignedChecks: 0,
+    chunkIndex: chunkIndex,
+    earliestSlotDeadline: 0});
+  _dataPerChunkReceived[chunkIndex]++;
+  _senderInformation[msg.sender].dataSubmitted++;
+  emit DataVerificationRequestedEvent(_dataCount);
+
+  _addToPending(_dataCount);
+
+  _dataCount++;
+
+  if (_config.needs.maxDataPerSender > 0) {
+    unchecked {
+      _senderInformation[msg.sender].bondBalance = _senderInformation[msg.sender].bondBalance -
+      _config.rewardConfig.dataSenderBondPerData;
+    }}
+}
+\end{lstlisting}
+
+This code implements the Data submission workflow described in Section~\ref{subsec:proto-datasubmit}.
+
+\subsection{Spatial data validation}\label{subsec:implementation-spatial-data-validation}
+The spatial data validation is required for the protocol because the data need to be localized in a certain area of the geographical space.
+In the \lstinline{publishIpfsCid} function there are some lines of code that handle these checks and locate the data in the appropriate chunks.
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{publishIpfsCid} function spatial validation code},
+    label={lst:proto-implementation-publish-ipfs-cid-geographical-handling}]
+function publishIpfsCid(//...
+  GlobalPosition calldata position)
+  external virtual {
+  //...
+  require(position.isValid(), "Invalid Coordinates");
+  //...
+  PackedPosition memory packed = position.packCoordinates();
+  (uint16 chunkIndex, bool inside) = _getChunkIndex(packed);
+  require(inside, "Outside campaign area");
+  //...
+  _dataPerChunkReceived[chunkIndex]++;
+  //...
+}
+\end{lstlisting}
+The \lstinline{publishIpfsCid} function requires, among others, the \lstinline{position} parameter of type \lstinline{GlobalPosition}, has four fields, two for latitude and two for longitude.
+For both coordinates a field is used for the integer part, the second one for the fractional part as up to seven decimal digits.
+The struct is shown in Listing~\ref{lst:proto-implementation-globalposition-struct}.
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{GlobalPosition} implementation struct},
+    label={lst:proto-implementation-globalposition-struct}]
+struct GlobalPosition {
+  int32 latitudeInteger; // [-90, +90]
+  int32 latitudeDecimal; // (-10_000_000, +10_000_000) sign used iff integer is 0.
+  int32 longitudeInteger;// [-180, +180]
+  int32 longitudeDecimal;// (-10_000_000, +10_000_000) sign used iff integer is 0.
+}
+\end{lstlisting}
+The struct comes with a library, called \lstinline{GlobalPositionLibrary}.
+The aim of this library is straightforward: make a clear interface to work with the introduced struct.
+The library has two functions: \lstinline{isValid} and \lstinline{packCoordinates}.
+
+The \lstinline{isValid} function returns true if the coordinate is valid, false otherwise.
+A GlobalPosition is valid when its integer parts stay within the standard geographic ranges, latitude between -90 and +90 inclusive, longitude between -180 and +180 inclusive.
+Each decimal part has a magnitude strictly below $10,000,000$, since that's the value of exactly one degree in E7 precision and anything at or above it would overflow into the next integer step.
+
+The sign of the coordinate follows a simple rule: when the integer part is non-zero it carries the sign, and the decimal contributes only its magnitude; when the integer part is zero, the decimal carries the sign instead.
+This second branch is what makes the band (-1°, 0°) representable on both axes, without it, every point between the equator and one degree south, or between Greenwich and one degree west, would be unreachable.
+
+The \lstinline{packCoordinates} function collapses the split (integer, decimal) representation into a single signed 32-bit integer per axis, scaled by $10^7$.
+
+The resulting E7 format has about 1.11 cm of precision.
+
+The code is shown in Listings~\ref{lst:proto-implementation-globalposition-library}.
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{GlobalPositionLibrary} implementation},
+    label={lst:proto-implementation-globalposition-library}]
+library GlobalPositionLibrary {
+  int32 internal constant DEC_BOUND = 10_000_000;
+
+  function isValid(GlobalPosition memory p) internal pure returns (bool) {
+    if (p.latitudeInteger < -90
+      || p.latitudeInteger > 90) return false;
+    if (p.latitudeDecimal <= -DEC_BOUND
+      || p.latitudeDecimal >= DEC_BOUND) return false;
+    if ((p.latitudeInteger == 90 || p.latitudeInteger == -90)
+      && p.latitudeDecimal != 0) return false;
+    if (p.longitudeInteger < -180 ||
+      p.longitudeInteger > 180) return false;
+    if (p.longitudeDecimal <= -DEC_BOUND ||
+      p.longitudeDecimal >= DEC_BOUND) return false;
+    if ((p.longitudeInteger == 180
+      || p.longitudeInteger == -180)
+      && p.longitudeDecimal != 0) return false;
+    return true;
+  }
+
+  function packCoordinates(GlobalPosition memory p) internal pure returns (PackedPosition memory) {
+    //valid checks ...
+    return PackedPosition({
+    latE7: int32(_combine(p.latitudeInteger,
+      p.latitudeDecimal)),
+    lonE7: int32(_combine(p.longitudeInteger,
+      p.longitudeDecimal))
+    });
+  }
+
+  function _combine(int32 integerPart, int32 decimalPart) private pure returns (int64) {
+    int64 base = int64(integerPart) * 10_000_000;
+    int64 dec  = int64(decimalPart);
+    int64 absDec = dec < 0 ? -dec : dec;
+    if (integerPart > 0) return base + absDec;
+    if (integerPart < 0) return base - absDec;
+    return dec;
+  }
+}
+\end{lstlisting}
+
+The packed position is used by the smart contract to identify the chunk and if the sent data is in the campaign area or not.
+The function that consumes the \lstinline{PackedPosition} struct is shown in Listing~\ref{lst:proto-implementation-packet-position-struct} and the \lstinline{_getChunkIndex} function is shown in Listing~\ref{lst:proto-implementation-pfc-chunk-index}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{PackedPosition} struct definition},
+    label={lst:proto-implementation-packet-position-struct}]
+struct PackedPosition {
+  int32 latE7; // 45.1234567 DEG -> 451234567
+  int32 lonE7; //  9.0000000 DEG ->  90000000
+}
+
+
+\end{lstlisting}
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{_getChunkIndex} function implementation},
+    label={lst:proto-implementation-pfc-chunk-index}]
+function _getChunkIndex(PackedPosition memory packed) internal view returns (uint16, bool) {
+  // Check bounds
+  if (packed.latE7 < _smartContractOrigin.latE7 ||
+    packed.latE7 >= _smartContractEnd.latE7) return (0, false);
+  if (packed.lonE7 < _smartContractOrigin.lonE7 ||
+    packed.lonE7 >= _smartContractEnd.lonE7) return (0, false);
+
+  // Calculating row and col
+  int32 chunkSize = int32(uint32(_config.chunkConfig.chunkSize));
+  uint16 row = uint16(uint32((packed.latE7 - _smartContractOrigin.latE7) / chunkSize));
+  uint16 col = uint16(uint32((packed.lonE7 - _smartContractOrigin.lonE7) / chunkSize));
+
+  uint16 index = row * _config.chunkConfig.chunk4Side + col;
+  return (index, true);
+}
+
+\end{lstlisting}
+
+\subsection{Verification workflow}\label{subsec:implementation-verification}
+Verifiers have listeners on the \lstinline{DataVerificationRequestedEvent} event and they are waiting for it.
+As shown in Section~\ref{subsec:implementation-data-submission}, at the end of the encrypted CID publishing the smart contract emits the \lstinline{DataVerificationRequestedEvent}.
+This event is emitted in this phase only by the \texttt{PrivacyFirstContract}, not in the extended one.
+Although \lstinline{DataVerificationRequestedEvent} has a parameter that indicates the dataId, this parameter is ignored, because the smart contract selects which data to verify in order to enforce a cooldown mechanism.
+
+The \texttt{VerifierPrivacyFirst} (\texttt{VPF}) exposes the method \lstinline{requestAndVerify} that allows the verifier to join the verification process of data, the same name is used to describe a function in the smart contract that validates and checks the verifier's requests.
+At the end of the validation performed by the smart contract, the \lstinline{VerifierElected} event is emitted and the verifier can proceed with validity checks.
+The SDK \lstinline{requestAuthToVerify} method calls the smart contract function and returns the \lstinline{decryptedCid}, after which the verifier can execute checks.
+The smart contract \lstinline{requestAuthToVerify} function is shown in Listing~\ref{lst:proto-implementation-pfc-request-auth-to-verify}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\lstinline{requestAuthToVerify} function implementation},
+    label={lst:proto-implementation-pfc-request-auth-to-verify}]
+function requestAuthToVerify() external {
+  //Checks on enrollment and bond
+
+  for (uint256 i = 0; i < _pendingDataIds.length; i++) {
+    uint256 dataIndex = _pendingDataIds[i];
+
+    //cooldown check
+    if (_verifierInformation[msg.sender].hasVerified) {
+      uint256 last = _verifierInformation[msg.sender].lastVerified;
+      if (dataIndex >= last &&
+        dataIndex < last + _config.needs.verifierCooldown) continue;
+    }
+
+    //checks on data slots
+    if (_dataEntries[dataIndex].assignedChecks
+      >= _config.needs.checksRequired
+      && _dataEntries[dataIndex].earliestSlotDeadline
+      > block.timestamp) {continue;}
+
+    (uint8 slotIndex, bool found) = _findAvailableSlot(dataIndex);
+    if (!found) continue;
+
+    //Underflow safety. Bond decreasing
+    unchecked {
+        _verifierInformation[msg.sender].bondBalance =
+          _verifierInformation[msg.sender].bondBalance
+          - _config.rewardConfig.dataVerifierBondPerData;
+    }
+
+    uint48 deadline = uint48(block.timestamp + _config.needs.verificationTimeout);
+
+    _verificationSlots[dataIndex][slotIndex] = VerificationSlot({
+      verifier: msg.sender,
+      result: false,
+      completed: false,
+      deadline: deadline});
+
+    // Update earliestSlotDeadline if unset or if the new deadline is sooner
+    if (_dataEntries[dataIndex].earliestSlotDeadline == 0 ||
+      deadline <
+      _dataEntries[dataIndex].earliestSlotDeadline) {
+        _dataEntries[dataIndex].earliestSlotDeadline
+          = deadline;}
+
+    //Assigning slots
+    if (slotIndex >=
+      _dataEntries[dataIndex].assignedChecks) {
+        _dataEntries[dataIndex].assignedChecks
+        = slotIndex + 1;}
+
+    _verifierInformation[msg.sender].verifyingData = dataIndex;
+    _verifierInformation[msg.sender].isVerifying = true;
+
+    _emitVerifierElected(msg.sender, dataIndex, slotIndex);
+    return;
+  }
+  revert("No data available for verification");
+}
+\end{lstlisting}
+
+The function performs multiple checks to guarantee a fast data retrieval with the minimum amount of gas usage as discussed in Section~\ref{sec:implementation-gas-optimization}, the \lstinline{_findAvailableSlot} function checks if a data has a free slot, if not, the function analyzes the next pending entry.
+In \lstinline{_emitVerifierElected}, a \lstinline{VerifierElected} event is emitted; the verifiers are waiting for that event, when triggered by the event, they can invoke the \lstinline{verifyCallback} that is given in the constructor, as explained in Section~\ref{subsec:implementation-verifier-enrollment}.
+In addition, the verifiers can use \lstinline{submitVerifyResult} function of the smart contract to deliver the verification result.
+A summary of verify workflow is shown in \lstinline{requestAndVerify} method of \texttt{VerifyPrivacyFirst} class, whose implementation in shown in Listing~\ref{lst:proto-implementation-vpf-request-and-verify}.
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{VPF}'s \lstinline{requestAndVerify} method implementation},
+    label={lst:proto-implementation-vpf-request-and-verify}]
+async requestAndVerify(): Promise<{ dataId: number;
+    decryptedCid: string;
+    result: VerificationResult }> {
+    try{
+    const {dataId, decryptedCid}
+      = await this.requestAuthToVerify();
+    const result = this.verifyCallback(decryptedCid, dataId);
+    const tx = await this.submitResult(result);
+    await tx.wait();
+    return {dataId, decryptedCid, result};
+  } catch (ignored){}
+  return {dataId: -1, decryptedCid: "", result: VerificationResult.CANNOT_COMPLETE};
+}
+\end{lstlisting}
+
+When the majority of required verifiers votes with the same significant result (data is valid or invalid), the validated data is removed from the pending queue and the smart contract rewards the correct verifiers and the sender, if the data was valid.
+The whole verifier workflow is implemented looking at Section~\ref{subsec:proto-verification}; the final decisions of the smart contract implement the data lifecycle shown in Figure~\ref{fig:proto-design-datum-lifecycle}.
+
+\section{Economic model}\label{sec:implementation-economic-model}
+The economic model described in Section~\ref{sec:incentive-mechanisms} executes its logic on-chain through the smart contract and the use of the DST ERC-20 token.
+The same token is used to manage bond deposits.
+The following subsections describe how the reward logic and bond system are enforced.
+
+\subsection{DST token integration}\label{subsec:implementation-dst-integration}
+The adoption of a custom token instead of using ETH is justified because of a certain numbers of wanted aspects, like reentrancy protection, because ERC-20 has no callback and hooks to exploit to perform the attack~\cite{eip20}.
+The Table~\ref{tab:economic-model-eth-dst-comparison} shows a comparison between use ETH native and a custom ERC-20 token, like DST.
+In addition, the absence of payable functions blocks the receiving of ETH by error, because solidity on compile time adds a check to avoid this type of errors~\cite{solidity-abi-spec}.
+
+The DST token is implemented thought the \texttt{DataSentTokenContract}, which implementation is shown in Listing~\ref{lst:proto-implementation-dst-contract}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{DataSentTokenContract} (DST) token implementation},
+    label={lst:proto-implementation-dst-contract}]
+contract DataSentTokenContract is ERC20, Ownable {
+    constructor(uint256 initialSupply) ERC20("DataSentToken", "DST") Ownable(msg.sender) {
+        _mint(msg.sender, initialSupply);
+    }
+
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
+    }
+
+    function burn(uint256 amount) public {
+        _burn(msg.sender, amount);
+    }
+}
+\end{lstlisting}
+
+\begin{table}
+    \begin{tabular}{|p{2.8cm}|p{5.5cm}|p{5.5cm}|}
+        \hline
+        \textbf{Aspect} & \textbf{ETH native} & \textbf{ERC-20 (DST)} \\
+        \hline
+        Deposit mechanism
+        & \texttt{msg.value} su funzione \texttt{payable}
+        & \texttt{approve} + \texttt{transferFrom} \\
+        \hline
+        Reentrancy risk
+        & High: \texttt{.call} triggers recipient's \texttt{receive}/\texttt{fallback}
+        & Lower: not overridden \texttt{transfer} does not trigger external code \\
+        \hline
+        Multiple payouts
+        & Every \texttt{.call} can fail independently
+        & \texttt{transfer} reverts \\
+        \hline
+        \texttt{payable} functions
+        & Necessary
+        & Not necessary \\
+        \hline
+        Extra step
+        & -
+        & \texttt{approve} is required before deposit \\
+        \hline
+        Gas per transfer
+        &  21.000 gas~\cite{wood2014ethereum}
+        & DA MISURARE! \\ %TODO MISURARE (con GAS REPORTER MISURARE LA TRANSFER FROM).
+        \hline
+    \end{tabular}
+    \caption{Comparison between ETH native and ERC-20 (DST)}
+    \label{tab:economic-model-eth-dst-comparison}
+\end{table}
+
+\subsection{Reward logic}\label{subsec:implementation-reward}
+Rewards incentivize senders to contribute data to the campaign.
+For verifiers, the reward is the incentive to act honestly.
+The reward is granted to senders that submit valid data, and is also paid to verifiers that vote in agreement with the majority on whether a given datum is valid.
+
+In \texttt{PrivacyFirstContract} the reward for the sender is constant and equal to \texttt{dataSenderPayout}, described in Table~\ref{tab:params-rewards}.
+For \texttt{PrivacySecondContract} the behavior is described in Section~\ref{subsec:extended-protocol-introducing-geographical-incentives}.
+
+For both protocols, the reward for verifiers is equal to \texttt{dataVerifierPayout}.
+
+\subsection{Bond logic}\label{subsec:implementation-bond}
+The bond, as described in Section~\ref{subsec:proto-bond-model}, is useful to discourage dishonest behaviors, such as a sender who submits invalid data or a verifier that votes incorrectly.
+The bond implementation lives in \texttt{PrivacyFirstContract}, and it is kept in the second version of the contract.
+
+In the SDK classes, the \lstinline{senderPayBond} and \lstinline{verifierPayBond} smart contract functions are called in the \lstinline{payBond} methods, which are called in \lstinline{setup} methods, for both actors.
+For senders and verifiers, the bond deducted per action is \lstinline{dataSenderBondPerData} for senders and \lstinline{dataVerifierBondPerData} for verifiers, both described in Table~\ref{tab:params-rewards}.
+The total amount of bond to supply is calculated in the constructor as shown in Listing~\ref{lst:proto-implementation-token-supply-bond}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={DST token to supply as bond for senders and verifiers},
+    label={lst:proto-implementation-token-supply-bond}]
+//...
+_requiredSenderBond =
+  _config.needs.maxDataPerSender *
+  _config.rewardConfig.dataSenderBondPerData;
+_requiredVerifierBond =
+  _config.needs.maxDataPerVerifierPerBond *
+  _config.rewardConfig.dataVerifierBondPerData;
+//...
+\end{lstlisting}
+
+Senders cannot pay bond twice because the number of DST token to supply to the contract is enough only for the \lstinline{maxDataPerSender} parameter, described in Table~\ref{tab:params-needs}.
+The Listing~\ref{lst:proto-implementation-sender-pay-bond-function} shows the code of the \lstinline{senderPayBond} function, which execute checks whether the sender already paid a bond and registers the payment.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Smart contract's \lstinline{senderPayBond} function},
+    label={lst:proto-implementation-sender-pay-bond-function}]
+function senderPayBond() external {
+  require(_senders[msg.sender], "Not a sender");
+  require(!_senderInformation[msg.sender].bondPaid,
+    "Bond already paid");
+  _dstContract.transferFrom(msg.sender, address(this), _requiredSenderBond);
+  _senderSupplyBond = _senderSupplyBond + _requiredSenderBond
+  _senderInformation[msg.sender].bondBalance = _requiredSenderBond;
+  _senderInformation[msg.sender].bondPaid = true;
+}
+\end{lstlisting}
+
+Verifiers can refill their bond for this reason, there are no checks in the \lstinline{verifierPayBond} function, whose code is shown in Listing~\ref{lst:proto-implementation-verifier-pay-bond-function}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Smart contract's \lstinline{verifierPayBond} function},
+    label={lst:proto-implementation-verifier-pay-bond-function}]
+function verifierPayBond() external {
+  require(_verifiers[msg.sender], "Not a verifier");
+  _dstContract.transferFrom(msg.sender, address(this), _requiredVerifierBond);
+  _verifierSupplyBond = _verifierSupplyBond + _requiredVerifierBond;
+  _verifierInformation[msg.sender].bondBalance =
+    _verifierInformation[msg.sender].bondBalance +
+    _requiredVerifierBond;
+}
+\end{lstlisting}
+
+The bond balance is deducted when Sender and Verifier perform an action that could lead to misbehavior.
+Senders do this when they publish the CID of the data they send, and verifiers do this when they request verification of a piece of data and it is found.
+Both pieces of code that handle this logic are shown in Listing~\ref{lst:proto-implementation-bond-deducted}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Bond deducted from sender and verifier balance},
+    label={lst:proto-implementation-bond-deducted}]
+//Senders
+function publishIpfsCid(
+    bytes calldata encryptedCid,
+    GlobalPosition calldata position
+) external virtual {
+  // ...
+  unchecked {
+    _senderInformation[msg.sender].bondBalance =
+      _senderInformation[msg.sender].bondBalance -
+      _config.rewardConfig.dataSenderBondPerData;
+  }
+  // ...
+}
+
+//Verifiers
+function requestAuthToVerify() external {
+  // ...
+  unchecked {
+  _verifierInformation[msg.sender].bondBalance =
+    _verifierInformation[msg.sender].bondBalance -
+    _config.rewardConfig.dataVerifierBondPerData;
+  }
+  // ...
+}
+\end{lstlisting}
+
+If the actor acts honestly, the reward and the bond are transferred together to avoid multiple transfers.
+Otherwise, the bond is lost and no reward is granted.
+The total payout calculation is shown in Listing~\ref{lst:proto-implementation-total-actor-pay}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Total payout calculation},
+    label={lst:proto-implementation-total-actor-pay}]
+// For senders
+uint256 total = _config.rewardConfig.dataSenderPayout + _config.rewardConfig.dataSenderBondPerData;
+
+// For verifiers
+uint256 total = _config.rewardConfig.dataVerifierPayout + _config.rewardConfig.dataVerifierBondPerData;
+
+// For both
+_dstContract.transfer(slot.verifier, total);
+\end{lstlisting}
+
+\section{Extended protocol}\label{sec:implementation-extended-protocol}
+In this section, all the different behaviors of \texttt{PrivacySecondContract} are described.
+All the changes have been made according to Section~\ref{sec:addressing-issues}.
+
+Sections~\ref{subsec:extended-protocol-extended-verifier-enrollment} and~\ref{subsec:extended-protocol-extended-verification-phase}
+explain how the principle of least privilege~\cite{saltzer1975protection} is enforced, as discussed in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+
+\subsection{Extended verifier enrollment}\label{subsec:extended-protocol-extended-verifier-enrollment}
+In \texttt{PFC}, as described in Section~\ref{subsec:implementation-verifier-enrollment}, all verifiers receive $K_{dec}$ on enrollment and this introduces the vulnerability exploited by the attack described in Section~\ref{subsec:security-analysis-issues-verifier-attack} exploits.
+Addressing this vulnerability is straightforward: create a key pair per data $(KD_{enc},KD_{dec})$ and deliver $KD_{dec}$ only when the verifier needs it to decrypt and verify the assigned data.
+For this reason, in the \texttt{PSC} enrollment phase no key is delivered.
+
+Listing~\ref{lst:proto-implementation-pfs-handle-verifier-enrollment} shows how the event handler for verifier enrollment phase is overridden and how an empty string is passed as placeholder for the key to preserve ABI compatibility with \texttt{PFC}, the Listing also shows how the public keys are stored in a map to encrypt $KD_{dec}$ when the verifier is elected in the verification phase.
+In addition, Listing~\ref{lst:proto-implementation-pfs-verifier-decryption-key-pub} shows that at the end of the function the \texttt{VerifierEnrolled} event is emitted, instead of \texttt{VerifierDecryptionKeyReady}, which is unused in \texttt{PSC}.
+
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{B}'s \texttt{handleVerifierEnrollment} method in \texttt{OPS}},
+    label={lst:proto-implementation-pfs-handle-verifier-enrollment}
+]
+override async handleVerifierEnrollment(
+    verifierAddress: string,
+    encryptedPubKeyJson: string,
+): Promise<void> {
+    const bundle = JSON.parse(encryptedPubKeyJson);
+    const verifierPubKey = this.cipher.decryptStringHybrid(this.keys.privateKey, bundle);
+    this.verifierPublicKeys.set(verifierAddress, verifierPubKey); //Store verifiers keys
+
+    await this.contract
+        .connect(this.signer)
+        .publishVerifierDecryptionKey(verifierAddress, "");
+}
+
+\end{lstlisting}
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} publishVerifierDecryptionKey overridden function},
+    label={lst:proto-implementation-pfs-verifier-decryption-key-pub}]
+function publishVerifierDecryptionKey(address verifier, string calldata) public override {
+    require(_campaignOpen, "Campaign is closed");
+    require(msg.sender == _owner, "Not the owner");
+    _verifiers[verifier] = true;
+    _verifierInformation[verifier] = VerifierInformation({
+        lastVerified: 0,
+        hasVerified: false,
+        verifyingData: 0,
+        isVerifying: false,
+        bondBalance: 0
+    });
+    delete _verifierEnrolledRequest[verifier];
+    emit VerifierEnrolled(verifier);
+}
+\end{lstlisting}
+
+\subsection{Extended verification phase}\label{subsec:extended-protocol-extended-verification-phase}
+The verification phase in \texttt{PSC} is the phase that delivers $KD_{dec}$ to them.
+Before the Verifier election and insertion in verify queue, in this protocol, the campaign initiator has to create a key pair per data $(KD_{enc},KD_{dec})$.
+Since senders \texttt{S} have received $K_{enc}$ in enrollment phase (Section~\ref{subsec:implementation-sender-enrollment}), a trusted third party is required to generate and manage the key pair; this role is fulfilled by the campaign initiator.
+
+In \texttt{PSC}, the \texttt{publishIpfsCid} function is overridden, the change that is relevant to this phase is the emission of \texttt{DataRequiredVerificationKeyGeneration} event, which is listened by \texttt{B}'s SDK.
+The event handler is shown in Listing~\ref{lst:proto-implementation-ops-handle-data-verification-exchange-keys}, the called smart contract function is shown in Listing~\ref{lst:proto-implementation-psc-verification-key-ready}.
+The called function emits the \texttt{DataVerificationRequestedEvent} which is the same event emitted by \texttt{PFC}.
+
+After the verification authorization request, which follows the same flow as in \texttt{PFC}, \texttt{\_emitVerifierElected} is invoked, that function is overridden in \texttt{PSC}, the code of both functions is shown in Listing~\ref{lst:proto-implementation-emit-verifier-elected}.
+
+
+
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{B}'s \texttt{handleDataRequiresKey} method in \texttt{OPS}},
+    label={lst:proto-implementation-ops-handle-data-verification-exchange-keys}
+]
+async handleDataRequiresKey(dataId: number, encryptedCid: string): Promise<void> {
+    this.encryptedCidCache.set(dataId, encryptedCid);
+
+    await this.contract
+        .connect(this.signer)
+        .notifyVerificationKeyReady(dataId);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[
+language=solidity,
+caption={\texttt{PSC} \lstinline{notifyVerificationKeyReady} function},
+label={lst:proto-implementation-psc-verification-key-ready}]
+function notifyVerificationKeyReady(uint256 dataId) external{
+  require(msg.sender == _owner, "Not the owner");
+  require(_campaignOpen, "Campaign is closed");
+  require(_awaitingKeyGeneration[dataId],
+    "Data not awaiting key generation");
+  delete _awaitingKeyGeneration[dataId];
+  _addToPending(dataId);
+  emit DataVerificationRequestedEvent(dataId);
+}
+\end{lstlisting}
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PFC} and \texttt{PSC} \lstinline{_emitVerifierElected} implementations"},
+    label={lst:proto-implementation-emit-verifier-elected}]
+//PrivacyFirstContract
+function _emitVerifierElected(address verifier, uint256 dataId, uint8 slotIndex) internal virtual {
+  emit VerifierElected(verifier, dataId, slotIndex, _dataEntries[dataId].encryptedCid);
+}
+
+//PrivacySecondContract
+function _emitVerifierElected(address verifier, uint256 dataId, uint8 slotIndex) internal override {
+  delete _bundleDelivered[dataId][slotIndex];
+  emit VerifierElectedForData(verifier, dataId);
+}
+\end{lstlisting}
+
+For \texttt{PSC}, the function shown in Listing~\ref{lst:proto-implementation-emit-verifier-elected} emits the \texttt{VerifierElectedForData} event.
+Listing~\ref{lst:proto-implementation-ops-handle-verifier-elected} shows how the campaign initiator handles the event.
+
+
+The smart contract's function \lstinline{deliverVerificationBundle} performs check and then emits \texttt{VerifierVerificationBundleReady} event, which is listened by verifiers and contains the verification bundle.
+Once the verifier receives the bundle, they can submit the verification result as in \texttt{PFC}.
+
+\begin{lstlisting}[
+    language=typescript,
+    caption={\texttt{B}'s \texttt{handleVerifierElected} method in \texttt{OPS}},
+    label={lst:proto-implementation-ops-handle-verifier-elected}
+]
+async handleVerifierElected(verifier: string,
+dataId: number): Promise<void> {
+  const pkV = this.verifierPublicKeys.get(verifier);
+  if (!pkV) throw new Error(`...`);
+
+  const encryptedCid = this.encryptedCidCache.get(dataId);
+  if (!encryptedCid) throw new Error(`...`);
+
+  const bundleContent = JSON.stringify({encryptedCid,
+    kdec: this.encryptionKeys.decryptionKey});
+
+  const bundleEnvelope = this.cipher.encryptStringHybrid(pkV, bundleContent);
+  const bundleBytes = toUtf8Bytes(JSON.stringify(bundleEnvelope));
+
+  await this.contract
+    .connect(this.signer)
+    .deliverVerificationBundle(dataId, verifier,bundleBytes);
+
+\end{lstlisting}
+
+\subsection{Verifier additional penalties}\label{subsec:extended-protocol-verifier-additional-penalties}
+The implementation of additional penalties for verifiers comes from the weakness of bond system if a verifier votes wrong, as described in Section~\ref{subsec:addressing-issues-missing-verifier-penalties}.
+For this reason two new functions have been included: \lstinline{_recordCorrectVote} and \lstinline{_recordWrongVote}, both in Listing~\ref{lst:proto-implementation-verifier-additional-penalities}.
+
+The functions are called according to the verification process result, the function \lstinline{_recordCorrectVote} counts how many correct votes have been cast.
+The counting process starts if the verifier made a mistake in a previous voting process, in this case the smart contract counts how many good votes are registered towards \lstinline{pardonWrongVoteAfterRightVotes} described in Table~\ref{tab:appendix-a-params-novel}.
+On \lstinline{pardonWrongVoteAfterRightVotes} votes, a wrong vote is pardoned.
+If the parameter is $0$ then no pardon system is implemented.
+
+The \lstinline{_recordWrongVote} function registers a wrong vote, once the wrong vote count reaches \lstinline{kickVerifierAfterWrongVotes}(described in Table~\ref{tab:appendix-a-params-novel}), the verifier is automatically kicked.
+If \lstinline{kickVerifierAfterWrongVotes} is $0$, then no auto-kick system is enabled and this feature is disabled.
+
+The \lstinline{_kickVerifier} function handles the kick process, transferring the remaining bond to the kicked verifier.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} \lstinline{_recordCorrectVote}, \lstinline{_recordWrongVote} and \lstinline{_kickVerifier} functions},
+    label={lst:proto-implementation-verifier-additional-penalities}]
+function _recordCorrectVote(address verifier) internal {
+    uint256 pardon = _novelParams.pardonWrongVoteAfterRightVotes;
+    if (pardon == 0 || _wrongVotes[verifier] == 0) return;
+
+    _rightVotesAccumulator[verifier]++;
+    if (_rightVotesAccumulator[verifier] >= pardon) {
+        _wrongVotes[verifier]--;
+        _rightVotesAccumulator[verifier] = 0;
+    }
+}
+
+function _recordWrongVote(address verifier) internal {
+    _wrongVotes[verifier]++;
+    uint256 kick = _novelParams.kickVerifierAfterWrongVotes;
+    if (kick > 0 && _wrongVotes[verifier] >= kick) {
+        _kickVerifier(verifier);
+        emit VerifierKicked(verifier);
+    }
+}
+
+function _kickVerifier(address verifier) internal {
+    uint256 bond = _verifierInformation[verifier].bondBalance;
+    if (bond > 0) {
+        unchecked { _verifierSupplyBond -= bond; }
+        _verifierInformation[verifier].bondBalance = 0;
+        _dstContract.transfer(verifier, bond);
+    }
+    if (_verifierInformation[verifier].isVerifying) {
+        uint256 dataId = _verifierInformation[verifier].verifyingData;
+        (uint8 slotIndex, bool found) = _getVerifierSlotIndex(dataId, verifier);
+        if (found) _removeVerifierFromData(dataId, slotIndex);
+        _makeVerifierAbleToOperate(verifier);
+    }
+    _verifiers[verifier] = false;
+}
+\end{lstlisting}
+
+The campaign initiator can also provide the manual kicking of a certain verifier calling the \lstinline{kickVerifier} function shown in Listing~\ref{lst:proto-implementation-verifier-manual-kick}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} public \lstinline{kickVerifier} function},
+    label={lst:proto-implementation-verifier-manual-kick}]
+function kickVerifier(address verifier) external {
+    require(msg.sender == _owner, "Not the owner");
+    require(_verifiers[verifier], "Not a verifier");
+    _kickVerifier(verifier);
+    emit VerifierKicked(verifier);
+}
+\end{lstlisting}
+
+
+\subsection{Introducing geographical incentives}\label{subsec:extended-protocol-introducing-geographical-incentives}
+Geographical incentives, described in Section~\ref{subsec:security-analysis-issues-unused-geography}, are introduced to cover areas with a lower presence of people in the campaign.
+
+For this reason, when a sender \texttt{S} sends a datum, they can expect a lower payout if the datum is in a densely covered area.
+The decay function, based on how many data are in a chunk (expressed by factor $alpha$, evaluated using Equation~\ref{eq:proto-design-define-alpha-ratio}) is shown in Figure~\ref{fig:reward-decay-curve}.
+
+The smart contract uses the babylonian square root formula, as shown in Listing~\ref{lst:proto-implementation-geo-incentives}.
+\begin{lstlisting}[
+    language=solidity,
+    caption={\texttt{PSC} \lstinline{_computeDecayedReward} function},
+    label={lst:proto-implementation-geo-incentives}]
+function _computeDecayedReward(uint256 countBeforeSubmission) internal view returns (uint256) {
+  uint256 maxPerChunk = _config.needs.maximumDataPerChunk;
+
+  if (!_novelParams.rewardDecayEnabled || maxPerChunk == 0)
+    return _config.rewardConfig.dataSenderPayout;
+
+  uint256 remaining = maxPerChunk - countBeforeSubmission;
+  uint256 ratio = remaining * SCALE / maxPerChunk;
+
+  uint256 k = _novelParams.rewardDecayFactor;
+  for (uint256 i = 0; i < k;) {
+    ratio = _sqrt(ratio * SCALE);
+    unchecked { i++; }
+  }
+
+  return _config.rewardConfig.dataSenderPayout * ratio / SCALE;
+}
+\end{lstlisting}
+
+\section{Gas optimization}\label{sec:implementation-gas-optimization}
+Gas is the unit measuring computational effort on the Ethereum blockchain; the aim is to minimize its consumption.
+
+For this reason, as shown before, the bond and reward payout are combined in a single transfer, but another technique is used to avoid high gas usage: the pending data to verify queue is based on swap-and-pop mechanism.
+
+The data structure is based on swap-and-pop using index mapping, the result is an unordered set, but it is gas-efficient and useful for this use case, because the verification order is not critical.
+Listing~\ref{lst:proto-implementation-pfc-data-pending} shows how the data structure is implemented, how data are inserted into and removed from it.
+The usage is shown in Listing~\ref{lst:proto-implementation-pfc-request-auth-to-verify}, all the operations have $O(1)$ computational cost, an example of \lstinline{_addToPending} function usage is shown in Listing~\ref{lst:proto-implementation-publish-ipfs-cid}.
+
+\begin{lstlisting}[
+    language=solidity,
+    caption={Gas-optimized pendingData unordered set implementation},
+    label={lst:proto-implementation-pfc-data-pending}]
+//Auxiliary data structures
+uint256[] internal _pendingDataIds;
+mapping(uint256 => uint256) internal _pendingIndex;
+
+//Insert into data structure
+function _addToPending(uint256 dataId) internal {
+    _pendingIndex[dataId] = _pendingDataIds.length;
+    _pendingDataIds.push(dataId);
+}
+
+//Remove from data structure
+function _removeFromPending(uint256 dataId) internal {
+    uint256 idx = _pendingIndex[dataId];
+    uint256 lastId = _pendingDataIds[_pendingDataIds.length - 1];
+    _pendingDataIds[idx] = lastId;
+    _pendingIndex[lastId] = idx;
+    _pendingDataIds.pop();
+    delete _pendingIndex[dataId];
+}
+\end{lstlisting}

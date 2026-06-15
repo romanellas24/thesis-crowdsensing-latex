@@ -1,0 +1,62 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam classFontStyle bold
+
+class PrivacyFirstContract {
+  # _dstContract : DataSentTokenContract
+  # _config : Config
+  # _owner : address
+  # _campaignOpen : bool
+  # _senders : mapping(address => bool)
+  # _verifiers : mapping(address => bool)
+  # _dataEntries : mapping(uint256 => DataEntry)
+  # _pendingDataIds : uint256[]
+  # _verificationSlots : mapping
+  # _remainingSupply : uint
+  --
+  + getInitiatorPublicKey() {virtual}
+  + publishEncryptedSenderPublicKey() {virtual}
+  + publishSenderEncryptionKey() {virtual}
+  + publishEncryptedVerifierPublicKey() {virtual}
+  + publishVerifierDecryptionKey() {virtual}
+  + publishIpfsCid() {virtual}
+  + requestAuthToVerify() {virtual}
+  + submitVerifyResult() {virtual}
+  + payInitialSupply()
+  + senderPayBond()
+  + verifierPayBond()
+  + withdrawBond()
+  + closeCampaign()
+  + getCampaignData()
+  # _addToPending() {virtual}
+  # _emitVerifierElected() {virtual}
+  # _rewardSender() {virtual}
+  # _rewardCorrectVerifiers() {virtual}
+  # _tryRewardVerifier() {virtual}
+}
+
+class PrivacySecondContract {
+  - _awaitingKeyGeneration : mapping(uint256 => bool)
+  - _bundleDelivered : mapping
+  - _computedSenderReward : mapping(uint256 => uint256)
+  - _wrongVotes : mapping(address => uint256)
+  - _rightVotesAccumulator : mapping(address => uint256)
+  - _novelParams : NovelParameters
+  --
+  + publishVerifierDecryptionKey() <<override>>
+  + publishIpfsCid() <<override>>
+  + submitVerifyResult() <<override>>
+  + notifyVerificationKeyReady()
+  + deliverVerificationBundle()
+  + kickVerifier()
+  + getExpectedSenderReward()
+  # _emitVerifierElected() <<override>>
+  # _rewardSender() <<override>>
+  # _rewardCorrectVerifiers() <<override>>
+  # _tryRewardVerifier() <<override>>
+}
+
+PrivacyFirstContract <|-- PrivacySecondContract
+
+@enduml

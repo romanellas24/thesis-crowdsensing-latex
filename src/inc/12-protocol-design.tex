@@ -171,7 +171,7 @@ All interactions are shown in Figure~\ref{fig:proto-design-workflow-sender-join}
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-sender-enrollment-out}
-        \caption{Sender phase workflow}\label{fig:proto-design-workflow-sender-join}
+        \caption{Sender enrollment phase workflow}\label{fig:proto-design-workflow-sender-join}
     \end{center}\label{fig:proto-design-workflow-sender-join-container}
 \end{figure}
 
@@ -206,7 +206,7 @@ All interactions are shown in Figure~\ref{fig:proto-design-workflow-verifier-joi
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.75\textwidth]{diagrams/proto-design-workflow-verifier-enrollment-out}
-        \caption{Verifier phase workflow}\label{fig:proto-design-workflow-verifier-join}
+        \caption{Verifier enrollment phase workflow}\label{fig:proto-design-workflow-verifier-join}
     \end{center}\label{fig:proto-design-workflow-verifier-join-container}
 \end{figure}
 
@@ -268,7 +268,7 @@ The full data lifecycle is shown in Figure~\ref{fig:proto-design-datum-lifecycle
 \begin{figure}
     \begin{center}
         \includegraphics[width=0.75\textwidth]{diagrams/protocol-datum-lifecycle-out}
-        \caption{Life cycle of a single data entry}\label{fig:proto-design-datum-lifecycle}
+        \caption{Lifecycle of a single data entry}\label{fig:proto-design-datum-lifecycle}
     \end{center}\label{fig:proto-design-datum-lifecycle-container}
 \end{figure}
 
@@ -376,7 +376,7 @@ Once the majority outcome becomes apparent, the verifier submits a vote
 aligned with the majority just before the timeout, guaranteeing
 the reward without performing any actual data validation.
 
-A robust solution would require a commit-reveal scheme~\cite{brassard1983commitreveal, eip1011}, where verifiers first commit a hash of their vote and later reveal the actual result.
+A robust solution would require a commit-reveal scheme~\cite{brassard1988commitreveal, eip1011}, where verifiers first commit a hash of their vote and later reveal the actual result.
 This would prevent verifiers from observing others' votes before submitting their own.
 However, implementing commit-reveal on-chain introduces additional gas costs and protocol complexity, and is left as a future extension.
 

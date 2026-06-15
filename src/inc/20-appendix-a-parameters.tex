@@ -17,10 +17,6 @@ This convention is explicitly noted for each applicable parameter.
 The \texttt{SmartContractNeeds} structure defines the operational rules of the crowdsensing campaign, including participation limits, and data acceptance criteria.
 \ref{tab:params-needs} lists each parameter with its type, constraints, and description.
 \begin{table}
-    \centering
-    \caption{Parameters of the \texttt{SmartContractNeeds} structure.}
-    \label{tab:params-needs}
-    \small
     \begin{tabular}{p{3.8cm} l p{1.8cm} p{5.8cm}}
         \hline
         \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
@@ -78,6 +74,8 @@ The \texttt{SmartContractNeeds} structure defines the operational rules of the c
         Used to compute the required verifier bond as $\texttt{maxDataPerVerifierPerBond} \times \texttt{dataVerifierBondPerData}$. \\
         \hline
     \end{tabular}
+    \caption{Parameters of the \texttt{SmartContractNeeds} structure.}
+    \label{tab:params-needs}
 \end{table}
 
 
@@ -88,10 +86,6 @@ The \texttt{ChunkConfig} structure controls the spatial partitioning of the camp
 \cref{tab:params-chunks} lists the two parameters involved.
 
 \begin{table}
-    \centering
-    \caption{Parameters of the \texttt{ChunkConfig} structure.}
-    \label{tab:params-chunks}
-    \small
     \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
         \hline
         \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
@@ -111,6 +105,8 @@ The \texttt{ChunkConfig} structure controls the spatial partitioning of the camp
         When set to 1, the spatial chunking system is effectively disabled and the entire campaign area is treated as a single region. \\
         \hline
     \end{tabular}
+    \caption{Parameters of the \texttt{ChunkConfig} structure.}
+    \label{tab:params-chunks}
 \end{table}
 
 The total geographic extent of the campaign area is derived as $\texttt{chunkSize} \times \texttt{chunk4Side}$ E7 units per side, starting from the origin coordinates specified in the \texttt{GlobalPosition} parameter (see \Cref{sec:appendix-a-origin-coordinated}.
@@ -120,10 +116,6 @@ The total geographic extent of the campaign area is derived as $\texttt{chunkSiz
 The \texttt{RewardConfig} structure governs the economic model of the campaign, defining the total token supply, per-operation payouts, and bond amounts denominated in DST (DataSent Token).
 \ref{tab:params-rewards} lists all parameters.
 \begin{table}
-    \centering
-    \caption{Parameters of the \texttt{RewardConfig} structure.}
-    \label{tab:params-rewards}
-    \small
     \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
         \hline
         \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
@@ -157,6 +149,8 @@ The \texttt{RewardConfig} structure governs the economic model of the campaign, 
         Returned together with the payout upon a majority-aligned vote. \\
         \hline
     \end{tabular}
+    \caption{Parameters of the \texttt{RewardConfig} structure.}
+    \label{tab:params-rewards}
 \end{table}
 
 The bond mechanism serves a dual purpose: it discourages low-quality submissions and frivolous verifications, while ensuring that participants have a stake in the correctness of their contributions.
@@ -170,10 +164,6 @@ The \texttt{GlobalPosition} structure defines the geographic origin (south-west 
 The coordinate representation and the E7 packing mechanism are described in detail in the implementation chapter. \Cref{tab:params-position} lists the fields and their valid ranges.
 
 \begin{table}
-    \centering
-    \caption{Fields of the \texttt{GlobalPosition} structure.}
-    \label{tab:params-position}
-    \small
     \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
         \hline
         \textbf{Field} & \textbf{Type} & \textbf{Valid Range} & \textbf{Description} \\
@@ -199,6 +189,8 @@ The coordinate representation and the E7 packing mechanism are described in deta
         & Fractional part of the longitude, representing up to seven decimal digits. \\
         \hline
     \end{tabular}
+    \caption{Fields of the \texttt{GlobalPosition} structure.}
+    \label{tab:params-position}
 \end{table}
 
 
@@ -208,10 +200,6 @@ These parameters are accepted at deployment time alongside the base configuratio
 \ref{tab:appendix-a-params-novel} lists each parameter with its type, constraints, and description.
 
 \begin{table}
-    \centering
-    \caption{Parameters of the \texttt{NovelParameters} structure.}
-    \label{tab:appendix-a-params-novel}
-    \small
     \begin{tabular}{p{3.8cm} l p{2.8cm} p{4.8cm}}
         \hline
         \textbf{Parameter} & \textbf{Type} & \textbf{Constraint} & \textbf{Description} \\
@@ -237,4 +225,6 @@ These parameters are accepted at deployment time alongside the base configuratio
         When set to zero, incorrect votes are never forgiven. \\
         \hline
     \end{tabular}
+    \caption{Parameters of the \texttt{NovelParameters} structure.}
+    \label{tab:appendix-a-params-novel}
 \end{table}
