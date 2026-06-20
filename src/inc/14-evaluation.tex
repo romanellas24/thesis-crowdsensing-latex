@@ -5,9 +5,37 @@ All analyses are expressed in absolute units of measure, such as gas units for c
 %TODO: AGGIUNGERE ALTRE SEZIONI QUANDO LE SCRIVO
 
 \section{Gas cost analysis}\label{sec:gas-analysis}
-B
+There are three contracts under analysis: \texttt{PFC}, \texttt{PSC}, and \texttt{FIFO}.
+\texttt{FIFO} shares the same base implementation as \texttt{PFC} but replaces the swap-and-pop pending list with a linear-shift FIFO approach.
+
+The methodology of these experiments is described in Section~\ref{subsec:gas-analysis-methodology}.
+Section~\ref{subsec:gas-analysis-pfc-vs-fifo} presents a comparison between the swap-and-pop data structure and FIFO queue.
+Section~\ref{subsec:gas-analysis-pfc-vs-psc} contains a comparison to show the overhead introduced by the novel features, i.e., the cost of extending \texttt{PFC} to \texttt{PSC}.
+
+Finally, Section~\ref{subsec:gas-analysis-real-world-costs} estimates the cost of organizing a crowdsensing campaign in USD.
+
 \subsection{Methodology}\label{subsec:gas-analysis-methodology}
-B'
+The test environment is based on Hardhat, the experiments are executed on a simulated Ethereum environment on the \texttt{cancun} hardfork was selected to avoid the per-transaction gas cap of $2^{24}$ gas introduced by EIP-7825~\cite{eip7825} in the Fusaka hard fork.
+In addition, the gas limit per block is modified to $10^9$ to avoid interruption on worst-case.
+
+A grid of scenarios, a grid made with a dimension of $4\times 4$, the scenarios are a combination between
+\begin{gather*}
+    \forall S \in \{1, 10, 100, 1000\}\\
+    \forall V \in \{2, 10, 100, 1000\}\\
+\end{gather*}
+A grid of scenarios in Figure~\ref{fig:proto-evaluation-scenario-grid}
+\begin{figure}
+    \centering %TODO: FARE A TABELLA
+    \includegraphics[width=0.75\textwidth]{diagrams/proto-evaluation-grid-scenarios}
+    \caption{Simulation scenarios: 16 combinations of sender and verifier cardinalities.}
+    \label{fig:proto-evaluation-scenario-grid}
+\end{figure}
+
+Each scenario submits 10,000 CIDs. All participants are assumed to behave honestly, following the happy path of the protocol.
+
+The results report gas units.
+First call operations are highlighted because first calls initialize storage slots, incurring higher costs due to cold SSTORE operations.
+
 \subsection{PFC and FIFO pending list management}\label{subsec:gas-analysis-pfc-vs-fifo}
 B''
 \subsection{PFC and PSC feature overhead}\label{subsec:gas-analysis-pfc-vs-psc}
