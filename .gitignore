@@ -311,5 +311,6 @@ TSWLatexianTemp*
 
 #IDE
 .idea
+.venv
 out/
 out-official/
