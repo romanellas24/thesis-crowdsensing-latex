@@ -227,6 +227,10 @@ def apply_thesis_style() -> None:
         "lines.linewidth": 1.2,
         "lines.markersize": 3,
         "savefig.pad_inches": 0.1,
+        "font.serif": ["STIX Two Text", "Computer Modern Roman", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
+        "pdf.fonttype": 42,
+        "ps.fonttype": 42,
     })
 
 

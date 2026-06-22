@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# run_all.sh — generate every figure for chapter 4 from the three CSV pairs.
+# run_all.sh - generate every figure for chapter 4 from the three CSV pairs.
 #
 # Expects the following file layout (adjust paths if your repo differs):
 #   results/pfc_gas_simulation_results.csv

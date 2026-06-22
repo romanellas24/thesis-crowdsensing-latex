@@ -1,0 +1,68 @@
+\chapter{Source code of supporting contracts}\label{ch:appendix-c-fifo-sc}
+
+This appendix collects the source code of supporting Solidity contracts
+referenced in the body of the thesis but not central to the protocol
+design itself.
+They are reproduced here in full to make the dissertation
+self-contained: a reader can verify experimental claims (in particular
+those of Section~\ref{subsec:gas-pfc-vs-fifo}) without reaching for the
+companion repository.
+
+\section{The FIFO baseline contract}\label{sec:app-c-fifo-contract}
+
+\texttt{PrivacyFirstContractFifo} is the FIFO-preserving variant of
+\texttt{PrivacyFirstContract} used as the baseline for the gas-cost
+comparison of Section~\ref{subsec:gas-pfc-vs-fifo}.
+It inherits from
+\texttt{PrivacyFirstContract} and overrides only the two functions that
+manage the pending data list, \texttt{\_addToPending} and
+\texttt{\_removeFromPending}.
+The inheritance pattern guarantees that
+every other code path is bytecode-identical to the optimised contract,
+isolating the measured gas difference to the single algorithmic
+decision under study.
+
+The chosen FIFO strategy is the most natural alternative to swap-and-pop:
+\texttt{\_addToPending} appends to the tail, and \texttt{\_removeFromPending}
+performs a linear scan to locate the entry followed by a left-shift of all
+subsequent elements. The result is an \(\mathcal{O}(n)\) removal that
+preserves the insertion order, in contrast to swap-and-pop's
+\(\mathcal{O}(1)\) removal that does not.
+
+\begin{lstlisting}[
+language=solidity,
+caption={Full source of \texttt{PrivacyFirstContractFifo}.},
+label={lst:chap-c-fifo-contract}]
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.28;
+
+import "./PrivacyFirstContract.sol";
+import "./inc/config/Config.sol";
+
+contract PrivacyFirstContractFifo is PrivacyFirstContract {
+
+constructor(
+  string memory ownerPubKey,
+  Config memory config,
+  address dstContractAddress
+  ) PrivacyFirstContract(ownerPubKey, config, dstContractAddress) {}
+
+  function _addToPending(uint256 dataId) internal override {
+    _pendingDataIds.push(dataId);
+  }
+
+  function _removeFromPending(uint256 dataId) internal override {
+    uint256 len = _pendingDataIds.length;
+    uint256 idx = len; // sentinel: not found
+    for (uint256 i = 0; i < len; i++) {
+      if (_pendingDataIds[i] == dataId) {
+        idx = i;break;
+      }}
+    require(idx < len, "Data not in pending");
+    for (uint256 i = idx; i + 1 < len; i++) {
+      _pendingDataIds[i] = _pendingDataIds[i + 1];
+    }
+    _pendingDataIds.pop();
+  }
+}
+\end{lstlisting}

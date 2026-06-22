@@ -4,15 +4,16 @@ All analyses are expressed in absolute units of measure, such as gas units for c
 
 %TODO: AGGIUNGERE ALTRE SEZIONI QUANDO LE SCRIVO
 
+
 \section{Gas cost analysis}\label{sec:gas-analysis}
 There are three contracts under analysis: \texttt{PFC}, \texttt{PSC}, and \texttt{FIFO}.
 \texttt{FIFO} shares the same base implementation as \texttt{PFC} but replaces the swap-and-pop pending list with a linear-shift FIFO approach.
 
 The methodology of these experiments is described in Section~\ref{subsec:gas-analysis-methodology}.
-Section~\ref{subsec:gas-analysis-pfc-vs-fifo} presents a comparison between the swap-and-pop data structure and FIFO queue.
-Section~\ref{subsec:gas-analysis-pfc-vs-psc} contains a comparison to show the overhead introduced by the novel features, i.e., the cost of extending \texttt{PFC} to \texttt{PSC}.
+Section~\ref{subsec:gas-pfc-vs-fifo} presents a comparison between the swap-and-pop data structure and FIFO queue.
+Section~\ref{subsec:gas-pfc-vs-psc} contains a comparison to show the overhead introduced by the novel features, i.e., the cost of extending \texttt{PFC} to \texttt{PSC}.
 
-Finally, Section~\ref{subsec:gas-analysis-real-world-costs} estimates the cost of organizing a crowdsensing campaign in USD.
+Finally, Section~\ref{subsec:gas-real-world-costs} estimates the cost of organizing a crowdsensing campaign in USD.
 
 \subsection{Methodology}\label{subsec:gas-analysis-methodology}
 The test environment is based on Hardhat, the experiments are executed on a simulated Ethereum environment on the \texttt{cancun} hardfork was selected to avoid the per-transaction gas cap of $2^{24}$ gas introduced by EIP-7825~\cite{eip7825} in the Fusaka hard fork.
@@ -23,28 +24,142 @@ A grid of scenarios, a grid made with a dimension of $4\times 4$, the scenarios 
     \forall S \in \{1, 10, 100, 1000\}\\
     \forall V \in \{2, 10, 100, 1000\}\\
 \end{gather*}
-A grid of scenarios in Figure~\ref{fig:proto-evaluation-scenario-grid}
-\begin{figure}
-    \centering %TODO: FARE A TABELLA
-    \includegraphics[width=0.75\textwidth]{diagrams/proto-evaluation-grid-scenarios}
+A grid of scenarios in Table~\ref{tab:proto-evaluation-scenario-grid}
+\begin{table}
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        & $V = 2$ & $V = 10$ & $V = 100$ & $V = 1000$ \\
+        \hline
+        $S = 1$ & \shortstack{S: 1\\V: 2} & \shortstack{S: 1\\V: 10} & \shortstack{S: 1\\V: 100} & \shortstack{S: 1\\V: 1000} \\
+        \hline
+        $S = 10$ & \shortstack{S: 10\\V: 2} & \shortstack{S: 10\\V: 10} & \shortstack{S: 10\\V: 100} & \shortstack{S: 10\\V: 1000} \\
+        \hline
+        $S = 100$ & \shortstack{S: 100\\V: 2} & \shortstack{S: 100\\V: 10} & \shortstack{S: 100\\V: 100} & \shortstack{S: 100\\V: 1000} \\
+        \hline
+        $S = 1000$ & \shortstack{S: 1000\\V: 2} & \shortstack{S: 1000\\V: 10} & \shortstack{S: 1000\\V: 100} & \shortstack{S: 1000\\V: 1000} \\
+        \hline
+    \end{tabular}
     \caption{Simulation scenarios: 16 combinations of sender and verifier cardinalities.}
-    \label{fig:proto-evaluation-scenario-grid}
-\end{figure}
+    \label{tab:proto-evaluation-scenario-grid}
+\end{table}
 
 Each scenario submits 10,000 CIDs. All participants are assumed to behave honestly, following the happy path of the protocol.
 
 The results report gas units.
 First call operations are highlighted because first calls initialize storage slots, incurring higher costs due to cold SSTORE operations.
 
-\subsection{PFC and FIFO pending list management}\label{subsec:gas-analysis-pfc-vs-fifo}
-B''
-\subsection{PFC and PSC feature overhead}\label{subsec:gas-analysis-pfc-vs-psc}
-B'''
-\subsection{Real-world deployment costs across networks}\label{subsec:gas-analysis-real-world-costs}
-B''''
+\subsection{Baseline cost breakdown of PFC}\label{subsec:gas-pfc-baseline} %TODO CORREGGERE DA QUI
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\linewidth]{diagrams/proto-evaluation-pfc_gas_per_operation_100s_100v}
+    \caption[Per-operation gas cost of \texttt{PFC}, first call vs subsequent calls.]{%
+        Per-operation gas cost of \texttt{PrivacyFirstContract} scenario $100\,\text{S} \times 100\,\text{V}$.
+        Operations that do not allocate new storage slots show no premium.}
+    \label{fig:proto-evaluation-pfc-per-operation}
+\end{figure}
+
+The Figure~\ref{fig:proto-evaluation-pfc-per-operation} shows a comparison between the fist call and the subsequent ones.
+
+Data submission, \texttt{data\_submission}, function requires 194k gas units for the first call and an average of 165k for subsequent ones, this is the most expensive function in the smart contract, this cost is justified SSTORES, event emission and checks.
+
+For the owner function that execute the $K_{dec}$ delivery, \texttt{owner\_send\_kdec}, there is an average of 133k gas units, which have no significative difference with the first call.
+
+The function \texttt{verification\_request} has cost dominated by the iteration over pending data structure.
+
+The function\texttt{verification\_submit} has a behavior that will be explained in Section~\ref{subsec:gas-pfc-vs-fifo}, all the other operations have a SSTORE and a DST transfer that increase the gas usage.
+
+\subsection{PFC and FIFO pending list management}\label{subsec:gas-pfc-vs-fifo}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-pfc_vs_fifo_submit_overlay_1000s_1000v}
+    \caption[Per-call gas of \texttt{verification\_submit}: PFC vs FIFO baseline.]{%
+        Per-call gas consumption of \texttt{verification\_submit} in the
+        $1000\,\text{S} \times 1000\,\text{V}$ scenario.
+        The dashed line marks the EIP-7825 per-transaction gas cap
+        of \(2^{24}\)\,gas, active from the Fusaka hard fork.
+        The two low bands ($\approx 50\,\text{kgas}$) coincide for both
+        contracts and correspond to submissions that do not trigger majority
+        consensus. The high bands correspond to majority-triggering
+        submissions. PFC stays bounded at $[150$, $280] \,\text{kgas}$ range,
+        while FIFO traces a decreasing curve from $56\,\text{Mgas}$ down to
+        $120\,\text{kgas}$ as the pending list shrinks.}
+    \label{fig:proto-evaluation-pfc-vs-fifo-submit-overlay}
+\end{figure}
+
+\texttt{PrivacyFirstContract} applies swap-and-pop approach to \texttt{\_removeFromPending} function.
+The deletion is made in time $O(1)$, but the order is not preserved.
+
+In this context, there is the need to implement a new Smart Contract that implements a FIFO pending data to verify queue, implemented as shown in Listing~\ref{lst:chap-c-fifo-contract}.
+This smart contract is a variant that inherit all the functions from \texttt{PFC} and overrides the functions \texttt{\_addToPending} and \texttt{\_removeFromPending} to implement a FIFO strategy.
+
+For the \texttt{verification\_submit} the Figure~\ref{fig:proto-evaluation-pfc-vs-fifo-submit-overlay}...... %TODO CONTINUARE.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\linewidth]{diagrams/proto-evaluation-eip7825_feasibility_normalized}
+    \caption[FIFO baseline infeasibility under EIP-7825 across all scenarios.]{%
+        Ratio between worst-case \texttt{verification\_submit} gas and the
+        EIP-7825 cap, for each of the 16 scenarios. Values above $1.0$
+        denote scenarios where the contract is unexecutable on a Fusaka-era
+        chain. \texttt{PrivacyFirstContract} (blue) stays consistently below
+        $0.02$, two orders of magnitude under the cap.
+        \texttt{PrivacyFirstContractFifo} (red) exceeds the cap in all
+        scenarios by a factor of $\approx 3.4\times$.
+        The ratio is independent of \((senders, verifiers)\) because the
+        worst-case shift cost is driven by \texttt{TOTAL\_CIDS}, not by the
+        actor count.}
+    \label{fig:proto-evaluation-eip7825-feasibility}
+\end{figure}
+
+\subsection{PFC and PSC feature overhead}\label{subsec:gas-pfc-vs-psc}
+B
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-psc_vs_pfc_overhead_1s_2v}
+    \caption{Operations common to PFC and PSC. Percentage deltas
+    annotated on each pair (red when $|\Delta| > 5\%$).}
+    \label{fig:proto-evaluation-psc-overhead-common}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-psc_only_operations_1s_2v}
+    \caption{Operations introduced by PSC that have no PFC counterpart.}
+    \label{fig:proto-evaluation-psc-overhead-only}
+\end{figure}
+
+\subsection{Real-world deployment costs across networks}\label{subsec:gas-real-world-costs}
+B'
+
+
+%TODO ------- VALUTARE
+\begin{figure}
+\centering
+\includegraphics[width=0.85\linewidth]{diagrams/proto-evaluation-pfc_verification_request_stability_1000s_1000v}
+\caption[Bounded gas cost of \texttt{verification\_request} under
+swap-and-pop.]{%
+Per-call gas of \texttt{verification\_request} in the
+$1000\,\text{S} \times 1000\,\text{V}$ scenario.
+The function iterates \texttt{\_pendingDataIds}, which remains
+compact and short throughout the campaign thanks to the
+\(\mathcal{O}(1)\) \texttt{\_removeFromPending}.
+Gas stays in $[85, 125]\,\text{kgas}$ for $99.9\%$ of the
+$20\,000$ calls.
+Residual variability is due to cooldown skips and slot-reassignment
+paths, not to growth in the data structure.}
+\label{fig:pfc-verification-request-stability}
+\end{figure}
+
 \section{BFT setup using LLMs}\label{sec:bft-analysis}
 C
+
+
 \section{Spatial simulation}\label{sec:spatial-simulation}
 D
+
+
 \section{Result and discussion}\label{sec:result-discussion}
 E
