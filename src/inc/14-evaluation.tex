@@ -521,8 +521,104 @@ per-block limit~\cite{eip7935}, forcing partial serialization of their
 transactions.
 
 \section{Spatial simulation}\label{sec:spatial-simulation}
-D
+Section~\ref{subsec:addressing-issues-geographical-incentive-issue} describes a
+mechanism to address the geographical incentive imbalance.
+The following simulation aims to empirically validate the implemented solution,
+using the Taxi Trajectory dataset from Porto~\cite{taxi_trajectory_ecml2015}.
 
+\subsection{Experimental setup}\label{subsec:spatial-setup}
+The experiment is conducted over the city of Porto using the taxi trajectory
+dataset~\cite{taxi_trajectory_ecml2015}.
+The grid comprises $10$ chunks per side, for a total of $100$ chunks.
+The campaign area is a square of approximately $28\,\text{km}$ per side, where
+each chunk covers approximately $2{.}8\,\text{km} \times 2{.}1\,\text{km}$.
+The origin of the area, located at the south-west corner, is at
+$41.14\text{°N}$, $8.61\text{°W}$.
+The experiment is conducted with $500$ and $1\text{,}000$ senders; since
+coverage increases by only $3$ chunks between the two configurations, only the
+results for the $1\text{,}000$-sender scenario are presented.
+Each taxi trajectory is associated with a distinct sender, and each chunk
+accepts a maximum of $10\text{,}000$ data entries.
+
+\subsection{Spatial coverage}\label{subsec:spatial-coverage}
+\begin{table}
+    \centering
+    \begin{tabular}{|r|r|c|r|}
+        \hline
+        \textbf{Senders} & \textbf{Total CIDs} & \textbf{Covered chunks} &
+        \textbf{Coverage} \\
+        \hline
+        500  &  21\,408 & 47 / 100 & 47\% \\
+        \hline
+        1000 &  45\,554 & 50 / 100 & 50\% \\
+        \hline
+    \end{tabular}
+    \caption{Spatial coverage results for the Porto taxi dataset across different
+    numbers of senders. The grid consists of 100 chunks
+        (\lstinline{chunk4Side} = 10, \lstinline{maximumDataPerChunk} = 10\,000).
+        Coverage saturates at 50\% between $N = 500$ and $N = 1\text{,}000$,
+        reflecting the geographic concentration of the Porto taxi fleet rather than
+        a protocol limitation.}
+    \label{tab:proto-evaluation-spatial-coverage}
+\end{table}
+
+Table~\ref{tab:proto-evaluation-spatial-coverage} shows how chunk coverage
+varies across the two simulation configurations.
+The coverage gain is negligible, whereas the number of submitted CIDs increases
+by a factor greater than $2$.
+This stagnation is attributable to the geographic concentration of the Porto
+taxi fleet: trajectories are predominantly located in the city centre, where
+population density is higher, as described in
+Section~\ref{subsec:security-analysis-issues-unused-geography}.
+An overview of the geographical distribution of the submitted data is shown in
+Figure~\ref{fig:proto-evaluation-map-cids-distribution}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\linewidth]{diagrams/proto-evaluation-porto-s1000}
+    \caption{Geographical distribution of received CIDs across chunks,
+        overlaid on a map of Porto ($N = 1\text{,}000$ senders).}
+    \label{fig:proto-evaluation-map-cids-distribution}
+\end{figure}
+
+\subsection{Reward decay evaluation}\label{subsec:spatial-decay}
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-heatmap-decay-N500}
+    \caption{Expected reward per chunk for the next CID submission,
+        with $N = 500$ senders and $k \in \{1, 2, 3, 4\}$.}
+    \label{fig:proto-evaluation-map-cids-distribution-s500}
+\end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-heatmap-decay-N1000}
+    \caption{Expected reward per chunk for the next CID submission,
+        with $N = 1\text{,}000$ senders and $k \in \{1, 2, 3, 4\}$.}
+    \label{fig:proto-evaluation-map-cids-distribution-s1000}
+\end{figure}
+
+Figures~\ref{fig:proto-evaluation-map-cids-distribution-s500}
+and~\ref{fig:proto-evaluation-map-cids-distribution-s1000} show how rewards
+vary as $k$ ranges over $\{1, 2, 3, 4\}$.
+For cold chunks — those with no submissions — the reward remains constant at
+its maximum value of $1\text{,}000\,\text{DST}$.
+For heavily saturated chunks the difference is substantial: on chunk $53$, the
+most saturated one ($\alpha = 0.931$), the expected reward for the next CID is
+$263\,\text{DST}$ with $k = 1$ and $846\,\text{DST}$ with $k = 4$.
+Consequently, a higher value of $k$ yields a higher reward for saturated
+chunks, resulting in a more gradual decay curve.
+
+\subsection{Discussion}\label{subsec:spatial-discussion}
+The simulation is conducted with at most $1\text{,}000$ senders due to RAM
+constraints.
+The results confirm that the decay mechanism operates as designed:
+Equation~\ref{eq:proto-design-reward-determination} in
+Section~\ref{subsec:addressing-issues-geographical-incentive-issue} produces an
+economic signal that incentivises rational senders to contribute to
+underrepresented chunks in order to maximise their reward.
+Furthermore, this experiment confirms that the implementation described in
+Section~\ref{subsec:extended-protocol-introducing-geographical-incentives} is
+correct.
 
 \section{Result and discussion}\label{sec:result-discussion}
 E
