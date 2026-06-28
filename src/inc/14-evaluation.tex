@@ -12,6 +12,7 @@ limit introduces a critical section that forces partial serialisation when
 multiple campaigns execute simultaneously.
 All analyses are expressed in absolute units of measure, such as gas units for
 computational cost and DST tokens for economic rewards.
+Finally, Section~\ref{sec:spatial-simulation} evaluates the behaviour of the protocol on a dataset of taxi traces from the city of Porto.
 
 
 \section{Gas cost analysis}\label{sec:gas-analysis}
@@ -454,7 +455,7 @@ To this end, the block count consumed by each campaign is measured as a function
 
 \subsection{Gas Consumption Baseline}\label{subsec:proto-evaluation-concurrent-execution-baseline}
 The gas consumption of every contract is reported in
-Tables~\ref{tab:proto-evaluation-merged-fifo}, \ref{tab:proto-evaluation-merged-pfc},~and~\ref{tab:proto-evaluation-merged-psc}.
+Tables~\ref{tab:proto-evaluation-merged-fifo},~\ref{tab:proto-evaluation-merged-pfc},~and~\ref{tab:proto-evaluation-merged-psc}.
 \texttt{PFC} is the contract with the lowest gas consumption.
 This experiment was conducted using \texttt{PFC}, because if multiple concurrent
 executions of \texttt{PFC} exhibit a critical section over the per-block gas limit,
@@ -621,4 +622,33 @@ Section~\ref{subsec:extended-protocol-introducing-geographical-incentives} is
 correct.
 
 \section{Result and discussion}\label{sec:result-discussion}
-E
+
+The experiments presented in this chapter lead to several conclusions.
+
+Section~\ref{sec:gas-analysis} compares the three contract variants.
+\texttt{FIFO} is infeasible under EIP-7825~\cite{eip7825}: its O($n$) pending
+list removal causes the worst-case gas of \texttt{submitVerifyResult} to exceed
+the per-transaction cap already at moderate CID counts.
+\texttt{PFC} is the most efficient contract, but it does not address the issues
+analysed in Section~\ref{sec:security-analysis-issues}.
+\texttt{PSC} addresses those issues at a measurable but controlled overhead: the
+additional gas introduced by its three extensions remains within the same order
+of magnitude as \texttt{PFC}.
+Across all three contracts, deployment and operation on Ethereum mainnet is
+expensive for the campaign initiator, while sender and verifier costs are
+acceptable.
+On L2 networks the costs become negligible for all roles.
+
+Section~\ref{sec:proto-evaluation-concurrent-execution} shows that $N$ concurrent
+campaigns produce a critical section on block capacity.
+In production, concurrent campaigns should be staggered or deployed on L2 networks
+with a higher block gas limit or a shorter block time to reduce contention.
+
+Section~\ref{sec:spatial-simulation} confirms that the reward decay mechanism
+operates as designed.
+The 50\% spatial coverage observed on the Porto dataset reflects the intrinsic
+geographic concentration of the taxi fleet rather than a protocol limitation.
+The decay parameter $k$ controls the steepness of the incentive curve: higher
+values produce a gentler decay, preserving a meaningful reward even for
+highly saturated chunks, while lower values more aggressively redirect senders
+towards underrepresented areas.
