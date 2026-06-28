@@ -1,3 +1,55 @@
 \chapter{Introduction} \label{ch:intro}
 \pagestyle{plain}
 \setcounter{page}{1}
+This thesis proposes a decentralised crowdsensing protocol implemented as
+an Ethereum smart contract, in which data privacy is guaranteed through
+hybrid encryption and off-chain storage via IPFS, and participation is
+incentivized through an ERC-20 token and a bond mechanism that discourages
+dishonest behaviour.
+The protocol partitions the campaign area into a grid of spatial chunks,
+allowing the contract to validate the geographic origin of each submission
+on-chain and to limit the number of data entries accepted per chunk,
+preventing the over-representation of densely populated areas.
+
+Since a smart contract executes deterministically on the EVM and its code is
+publicly verifiable, it replaces the trusted server with a trustless
+intermediary whose behaviour cannot be altered by any single party.
+
+Despite these properties, a security and incentive analysis of the base
+protocol reveals several open issues: a malicious verifier can learn the
+plaintext data before committing to a verdict, the geographic distribution
+of rewards does not incentivise senders to contribute to underrepresented
+areas, and verifiers who vote incorrectly face no economic consequence.
+A second contract addresses each of these issues in turn, introducing a
+trusted verifier mechanism based on an additional encryption layer, a
+reward decay function that reduces the payout for submissions to already
+saturated chunks, and a penalty system that tracks incorrect votes and
+allows the campaign initiator to remove misbehaving verifiers.
+
+The main contributions of this thesis are:
+\begin{itemize}
+    \item the design of a privacy-preserving crowdsensing protocol with a
+    formal security analysis conducted using ProVerif under the Dolev-Yao
+    attacker model;
+    \item the implementation of two Solidity smart contracts with documented
+    gas optimisations, including a swap-and-pop pending list management
+    strategy justified empirically against a FIFO baseline;
+    \item a TypeScript SDK that provides a per-actor API and handles
+    off-chain cryptographic operations, serving as a reference implementation
+    of the protocol;
+    \item an empirical evaluation covering gas consumption across multiple
+    networks, block capacity contention under concurrent campaigns, and
+    spatial coverage and reward distribution on a real-world taxi trajectory
+    dataset.
+\end{itemize}
+
+The remainder of this thesis is organised as follows.
+Chapter~\ref{ch:background} introduces the background concepts required
+to understand the protocol.
+Chapter~\ref{ch:protocol-design} presents the protocol design and its
+security analysis.
+Chapter~\ref{ch:implementation} describes the smart contract implementation
+and the SDK layer.
+Chapter~\ref{ch:evaluation} reports the experimental evaluation.
+Chapter~\ref{ch:conclusions} summarises the contributions and outlines
+directions for future work.
