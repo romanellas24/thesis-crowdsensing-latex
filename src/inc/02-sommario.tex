@@ -1,0 +1,138 @@
+\topmargin=-1cm
+\chapter*{Sommario}
+Il crowdsensing mobile consente la raccolta distribuita di dati
+geografici aggregando i contributi di un elevato numero di
+partecipanti.
+Questo paradigma si presta a scenari eterogenei come ad esempio: monitoraggio
+ambientale, analisi del traffico urbano, raccolta di dati
+epidemiologici.
+Scenari in cui la granularità spaziale e la scalabilità
+del numero di contributori sono requisiti primari.
+
+
+Le soluzioni esistenti affidano il coordinamento della campagna a
+un server centralizzato, introducendo un unico punto di fiducia
+che può compromettere la riservatezza dei dati raccolti e la
+privacy dei partecipanti.
+Un server centralizzato può essere compromesso, può colludere con
+terze parti o essere soggetto a guasti, rendendo fragile l'intero
+sistema.
+
+Questa tesi presenta il design, l'implementazione e la valutazione
+di un protocollo di crowdsensing decentralizzato e rispettoso della
+privacy, in cui il coordinamento è delegato a uno smart contract
+Ethereum.
+
+
+Lo smart contract sostituisce il server fidato con un intermediario
+pubblicamente verificabile e resistente alle manomissioni: la sua
+logica è eseguita deterministicamente dall'Ethereum Virtual
+Machine (EVM), ogni nodo della rete ne mantiene una copia, e il
+comportamento del contratto non può essere alterato da alcuna
+singola parte dopo il deploy.
+
+Il protocollo coinvolge tre attori principali.
+Il campaign initiator, \texttt{B} avvia la campagna, definisce i parametri
+spaziali e distribuisce le chiavi crittografiche.
+I sender raccolgono e inviano i dati geografici.
+I verifier, selezionati casualmente dal contratto, validano le
+submission esprimendo un voto di approvazione o rifiuto.
+La partecipazione di sender e verifier è regolata da un meccanismo
+di cauzione tramite token ERC-20 personalizzato, \texttt{DST}: il deposito
+viene restituito al termine della campagna, unitamente al reward,
+solo ai partecipanti onesti.
+
+La riservatezza dei dati è garantita attraverso crittografia
+ibrida.
+Ogni sender cifra il proprio payload con una chiave simmetrica
+AES-256-GCM e cifra quest'ultima con la chiave pubblica RSA del
+verifier eletto tramite RSA-OAEP.
+Il testo cifrato viene archiviato off-chain su IPFS; on-chain viene
+pubblicato esclusivamente il Content Identifier~(CID) cifrato.
+
+L'area della campagna è suddivisa in una griglia spaziale di chunk:
+il contratto valida on-chain l'origine geografica di ciascuna
+submission e limita il numero di dati accettati per chunk,
+prevenendo la sovra-rappresentazione delle zone ad alta densità di
+partecipanti.
+
+Un'analisi di sicurezza e incentivi del protocollo base individua
+tre problemi aperti.
+Primo, un verifier malevolo può accedere ai dati in chiaro prima di
+esprimere il proprio verdetto, falsando la valutazione.
+Secondo, la distribuzione geografica dei reward non incentiva i
+sender a contribuire alle aree meno coperte, favorendo la
+concentrazione nelle zone già sature.
+Terzo, i verifier che esprimono voti errati non subiscono alcuna
+conseguenza economica, oltre alla perdita del deposito cauzionale,
+rendendo conveniente il comportamento scorretto.
+La correttezza del protocollo base rispetto agli obiettivi di
+segretezza e autenticazione è verificata formalmente con ProVerif
+sotto il modello di attaccante Dolev-Yao, solo nel caso in cui gli attori si comportino onestamente e nel caso in cui l'avversario $\mathcal{A}$ non si autentichi come verifier.
+
+Un secondo contratto Solidity, \texttt{PSC}, estende il protocollo base
+affrontando ciascuno dei tre problemi.
+Per il problema del verifier malevolo, PSC introduce un ulteriore
+strato crittografico: \texttt{B}, per ogni dato inviato crea una coppia di chiavi asimmetriche.
+Quindi \texttt{B} decifra il dato inviato, riesegue l'upload del dato cifrato su IPFS e successivamente attraverso la chiave pubblica dei verificatori eletti distribuisce la chiave di decrittazione del dato da verificare.
+
+Per lo squilibrio geografico dei reward, PSC implementa una funzione
+di decadimento basata sul rapporto di saturazione del chunk: il
+reward per una submission verso un chunk già parzialmente saturo
+viene ridotto secondo la formula~$(1 - \alpha)^{1/2^k}$, dove
+$\alpha$~è il rapporto di saturazione e~$k$~è un parametro
+configurabile che controlla la ripidità del decadimento.
+
+La radice frazionaria viene calcolata on-chain tramite il metodo
+babilonese iterativo, evitando operazioni in virgola mobile non
+supportate dall'EVM.
+
+Per l'assenza di penalità, PSC traccia i voti corretti e scorretti
+di ciascun verifier e consente al campaign initiator di espellere
+i verifier che superano una soglia configurabile di voti errati.
+
+L'implementazione comprende i due contratti Solidity documentati,
+un SDK TypeScript che espone un'API per-attore e gestisce le
+operazioni crittografiche off-chain, e una suite di test completa
+sviluppata con Hardhat.
+
+Le ottimizzazioni di gas documentate includono la gestione della
+pending list tramite swap-and-pop al posto dello shift lineare FIFO,
+la compressione delle struct in un singolo slot EVM da 32~byte,
+l'aritmetica \texttt{unchecked} nelle funzioni di reward, e
+l'eliminazione dei dati di enrollment tramite \texttt{delete} dopo
+il loro utilizzo.
+
+La valutazione empirica copre tre dimensioni.
+L'analisi dei costi di gas su 16~scenari, con sender e verifier
+nell'intervallo~$\{1, 10, 100, 1000\}$, mostra che il contratto
+ottimizzato riduce i costi del verifier del~98\% rispetto alla
+baseline FIFO.
+La baseline FIFO risulta non praticabile su reti Fusaka-era in tutti
+i 16~scenari, superando il limite per-transazione di~$2^{24}$~gas
+introdotto dall'EIP-7825 di un fattore~$3.4\times$.
+PSC aggiunge un overhead contenuto rispetto a PFC, con l'incremento
+più significativo sulla data submission dovuto al calcolo del reward decaduto.
+
+Su reti L2 quali Arbitrum e Optimism, il costo di partecipazione
+diventa trascurabile per tutti i ruoli.
+L'analisi della saturazione dei blocchi sotto campagne concorrenti
+evidenzia una sezione critica sulla capacità del blocco: con quattro
+campagne parallele, il numero medio di blocchi consumati per
+campagna raggiunge~$3.65\times$.
+La simulazione spaziale sul dataset di traiettorie taxi della città
+di Porto valida il meccanismo di decadimento del reward, mostrando
+come la funzione redistribuisca efficacemente gli incentivi verso le
+aree meno coperte.
+La copertura geografica satura attorno al~50\% tra 500 e
+1\,000~sender, un limite attribuibile alla concentrazione geografica
+delle traiettorie nell'area urbana centrale piuttosto che al
+protocollo.
+
+I risultati confermano la fattibilità del protocollo su reti L2
+e su blockchain a basso costo del gas.
+Le direzioni future includono l'eliminazione del trust residuo nel
+campaign initiator tramite Proxy Re-Encryption decentralizzata,
+l'estensione della verifica formale a scenari di enrollment
+disonesto, e la validazione su dataset con distribuzione geografica
+più uniforme.
