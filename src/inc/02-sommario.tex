@@ -44,11 +44,8 @@ solo ai partecipanti onesti.
 
 La riservatezza dei dati è garantita attraverso crittografia
 ibrida.
-Ogni sender cifra il proprio payload con una chiave simmetrica
-AES-256-GCM e cifra quest'ultima con la chiave pubblica RSA del
-verifier eletto tramite RSA-OAEP.
-Il testo cifrato viene archiviato off-chain su IPFS; on-chain viene
-pubblicato esclusivamente il Content Identifier~(CID) cifrato.
+I dati cifrati vengono archiviati off-chain su IPFS; on-chain viene
+pubblicato esclusivamente il Content Identifier~(CID) cifrato usando la chiave $K_{enc}$.
 
 L'area della campagna è suddivisa in una griglia spaziale di chunk:
 il contratto valida on-chain l'origine geografica di ciascuna
