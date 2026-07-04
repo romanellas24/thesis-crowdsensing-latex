@@ -730,7 +730,7 @@ contract DataSentTokenContract is ERC20, Ownable {
         \textbf{Aspect} & \textbf{ETH native} & \textbf{ERC-20 (DST)} \\
         \hline
         Deposit mechanism
-        & \texttt{msg.value} in payable \texttt{payable}
+        & \texttt{msg.value} in \texttt{payable} function
         & \texttt{approve} + \texttt{transferFrom} \\
         \hline
         Reentrancy risk
@@ -750,8 +750,8 @@ contract DataSentTokenContract is ERC20, Ownable {
         & \texttt{approve} is required before deposit \\
         \hline
         Gas per transfer
-        &  21.000 gas~\cite{wood2014ethereum}
-        &  $\sim$ 65.000 gas (measured in Table~\ref{tab:proto-evaluation-psc-overhead-1000s-1000v}) \\
+        &  21,000 gas~\cite{wood2014ethereum}
+        &  $\sim$ 65,000 gas (measured in Table~\ref{tab:proto-evaluation-psc-overhead-1000s-1000v}) \\
         \hline
     \end{tabular}
     \caption{Comparison between ETH native and ERC-20 (DST)}
