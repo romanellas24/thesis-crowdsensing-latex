@@ -11,7 +11,7 @@ implementation, and evaluation.
 In the design phase, \texttt{PrivacyFirstContract} was developed, building
 on the crowdsensing protocol proposed by Bedogni and Ferretti~\cite{bedogni2024crowdsensing}.
 A subsequent security and incentive analysis identified several open issues,
-which were addressed in \texttt{PrivacySecondContract}, an extension that
+which were addressed in \texttt{\seqsplit{PrivacySecondContract}}, an extension that
 introduces a trusted verifier mechanism, a geographical reward decay, and
 a verifier penalty system.
 
@@ -37,8 +37,8 @@ and were not deployed on Ethereum mainnet or any L2 network, so the
 gas cost figures reported in Section~\ref{sec:gas-analysis} are based on
 local measurements rather than live network conditions.
 
-At the protocol level, the centrality of the campaign initiator $B$ remains
-an open issue: \texttt{PrivacySecondContract} does not eliminate $B$ as a
+At the protocol level, the centrality of the campaign initiator \texttt{B} remains
+an open issue: \texttt{PrivacySecondContract} does not eliminate \texttt{B} as a
 trust point, as discussed in Section~\ref{sec:security-analysis-issues}.
 
 Finally, the ProVerif analysis described in Section~\ref{subsec:security-analysis-issues-proverif} assumes
@@ -51,11 +51,11 @@ are outside the scope of the model, as noted in Appendix~\ref{ch:appendix-c-fifo
 \section{Future work}\label{sec:conclusion-future-work}
 
 Several directions are open for future investigation.
-The centrality of the campaign initiator $B$ could be eliminated by replacing
+The centrality of the campaign initiator \texttt{B} could be eliminated by replacing
 the current key distribution mechanism with Proxy Re-Encryption(PRE)~\cite{ateniese2006pre}: senders
 would encrypt their data under their own public key, and a decentralised proxy
 network, such as the Threshold Network\cite{thresholdnetwork}, would re-encrypt each ciphertext
-for the elected verifier without ever learning the plaintext, removing $B$ as
+for the elected verifier without ever learning the plaintext, removing \texttt{B} as
 an online trust point entirely.
 
 The formal security analysis could be strengthened by extending the ProVerif
