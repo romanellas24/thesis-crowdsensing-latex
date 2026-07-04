@@ -8,7 +8,7 @@ In addition, Chapter also describes how \texttt{PrivacyFirstContract} and its ex
 The architecture is divided between on-chain operations and off chain ones, this distinction exists
 because a lot of actions are not executable on the blockchain, like IPFS upload/download and ciphers
 usage are not permitted on smart contacts due to the non-deterministic nature of operations such as encryption~\cite{wood2014ethereum}.
-The off-chain operations are encapsulated in a SDK that allows actors to interact with the protocol without dealing directly with blockchain primitives.
+The off-chain operations are encapsulated in an SDK that allows actors to interact with the protocol without dealing directly with blockchain primitives.
 The structure is composed by two contracts: the base protocol inspired to~\cite{bedogni2024crowdsensing} and another one that extends the base protocol with the mechanisms proposed in Section~\ref{sec:addressing-issues}.
 
 \subsection{Contract hierarchy}\label{subsec:implementation-contract-hierarchy}
@@ -371,7 +371,7 @@ The general workflow is the following:
     \item \texttt{V} register a listener for the \lstinline{VerifierDecryptionKeyReady} event;
     \item \texttt{V} retrieve $PK_B$ which is embedded in the smart contract;
     \item \texttt{V} encrypt $PK_V$ using $PK_B$ and sends it to the smart contract using the \lstinline{publishEncryptedVerifierPublicKey} function;
-    \item The Smart Contract triggers via \lstinline{VerifierEnrolledEvent} the campaign initiator which is listening for this event as shown in the Listing~\ref{lst:proto-implementation-opf-start-listening};
+    \item The Smart Contract triggers via \lstinline{VerifierEnrolledEvent} the campaign initiator which is listening for this event as shown in Listing~\ref{lst:proto-implementation-opf-start-listening};
     \item \texttt{B} via the \lstinline{handleVerifierEnrollment} handler, encrypts $K_{dec}$ using $PK_V$, used for data decryption during verification;
     \item \texttt{B} sends the calculated ciphertext to the smart contract using \lstinline{publishVerifierDecryptionKey} which updates the Smart Contract state and the verifier is officially in the campaign, finally, \lstinline{VerifierDecryptionKeyReady} event is emitted;
     \item \texttt{V} is triggered by the event and get $K_{dec}$
@@ -791,7 +791,7 @@ _requiredVerifierBond =
 \end{lstlisting}
 
 Senders cannot pay bond twice because the number of DST token to supply to the contract is enough only for the \lstinline{maxDataPerSender} parameter, described in Table~\ref{tab:params-needs}.
-The Listing~\ref{lst:proto-implementation-sender-pay-bond-function} shows the code of the \lstinline{senderPayBond} function, which execute checks whether the sender already paid a bond and registers the payment.
+Listing~\ref{lst:proto-implementation-sender-pay-bond-function} shows the code of the \lstinline{senderPayBond} function, which executes checks whether the sender already paid a bond and registers the payment.
 
 \begin{lstlisting}[
     language=solidity,
@@ -888,7 +888,7 @@ In \texttt{PFC}, as described in Section~\ref{subsec:implementation-verifier-enr
 Addressing this vulnerability is straightforward: create a key pair per data $(KD_{enc},KD_{dec})$ and deliver $KD_{dec}$ only when the verifier needs it to decrypt and verify the assigned data.
 For this reason, in the \texttt{PSC} enrollment phase no key is delivered.
 
-Listing~\ref{lst:proto-implementation-pfs-handle-verifier-enrollment} shows how the event handler for verifier enrollment phase is overridden and how an empty string is passed as placeholder for the key to preserve ABI compatibility with \texttt{PFC}, the Listing also shows how the public keys are stored in a map to encrypt $KD_{dec}$ when the verifier is elected in the verification phase.
+Listing~\ref{lst:proto-implementation-pfs-handle-verifier-enrollment} shows how the event handler for verifier enrollment phase is overridden and how an empty string is passed as placeholder for the key to preserve ABI compatibility with \texttt{PFC}, Listing also shows how the public keys are stored in a map to encrypt $KD_{dec}$ when the verifier is elected in the verification phase.
 In addition, Listing~\ref{lst:proto-implementation-pfs-verifier-decryption-key-pub} shows that at the end of the function the \texttt{VerifierEnrolled} event is emitted, instead of \texttt{VerifierDecryptionKeyReady}, which is unused in \texttt{PSC}.
 
 \begin{lstlisting}[
