@@ -294,13 +294,13 @@ The formula to evaluate the USD cost of a certain gas usage is the following:
     \text{GAS}_{\text{COST}} = \text{GAS}_{\text{USED}} \times \text{GAS}_{\text{PRICE}} \times \text{TOKEN}_{\text{COST}}
     \label{eq:proto-evaluation-gas-costs}
 \end{equation}
-The equation~\ref{eq:proto-evaluation-gas-costs} explains how the $\text{GAS}_{\text{COST}}$ is calculated as a function of the gas used, the gas price, and the native network token cost.
+Equation~\ref{eq:proto-evaluation-gas-costs} explains how the $\text{GAS}_{\text{COST}}$ is calculated as a function of the gas used, the gas price, and the native network token cost.
 
 Tables~\ref{tab:proto-evaluation-merged-fifo},~\ref{tab:proto-evaluation-merged-pfc} and ~\ref{tab:proto-evaluation-merged-psc} show a comparison between the roles in the $1000\,\text{S} \times 1000\,\text{V}$ scenario, respectively for \texttt{FIFO}, \texttt{PFC} and \texttt{PSC} contracts.
 For verifiers and senders, the gas is calculated per actor; the mean, median, minimum, and maximum gas usage are reported.
 In addition, for each network all gas usage data are reported, while the corresponding gas cost reflects the selected network
 
-The Table~\ref{tab:proto-evaluation-gas-cost} shows the gas cost and the token cost for each network~\cite{etherscan, polygonscan, arbiscan, optimisticetherscan, gnosisscan, bscscan}.
+Table~\ref{tab:proto-evaluation-gas-cost} shows the gas cost and the token cost for each network~\cite{etherscan, polygonscan, arbiscan, optimisticetherscan, gnosisscan, bscscan}.
 The data used are the median values for each category recorded in 2025.
 The median was chosen because it is robust to outliers.
 \begin{table}

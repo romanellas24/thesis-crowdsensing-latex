@@ -2,7 +2,7 @@
 In the previous chapter the protocol was explained, some issues are identified, and mitigation strategies are proposed for the most critical ones.
 This chapter describes how the entire protocol is implemented.
 The development environment is made of Solidity on Ethereum~\cite{ethereum} and Hardhat as the development and testing framework.
-In addition, the chapter also describes how \texttt{PrivacyFirstContract} and its extension, \texttt{PrivacySecondContract} interacts and which functions are overridden and the motivation behind every choice.
+In addition, Chapter also describes how \texttt{PrivacyFirstContract} and its extension, \texttt{PrivacySecondContract} interacts and which functions are overridden and the motivation behind every choice.
 
 \section{Architecture}\label{sec:implementation-architecture}
 The architecture is divided between on-chain operations and off chain ones, this distinction exists
@@ -28,7 +28,7 @@ Since the extended contract needs to delivery verification bundles, to prevent d
 For this reason, once the bundle is sent the function \texttt{\_emitVerifierElected} is overridden in \texttt{PrivacySecondContract} to reset the delivery state, allowing a new bundle to be delivered if the verifier slot is reassigned.
 This allows the usage of the same location of memory, the delivery of verification bundles is required in order to address the issue of verifiers trust, described in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
 
-Since in the Section~\ref{subsec:addressing-issues-geographical-incentive-issue} is described a mechanism to incentive data sensing in heterogeneous geographical areas, it is necessary to change the rewarding system.
+Since in Section~\ref{subsec:addressing-issues-geographical-incentive-issue} is described a mechanism to incentive data sensing in heterogeneous geographical areas, it is necessary to change the rewarding system.
 For this reason, the method \texttt{\_rewardSender} is overridden and the only modification made is change the calculation of total payout.
 In the first version of the contract, the reward is always the full base payout, in the novel one, the contract reads the pre-computed reward from storage.
 The effective payout is calculated at the CID publish time, the contract execute the calculus in the \texttt{\_computeDecayedReward} function.
@@ -100,7 +100,7 @@ All the cryptographic operations cannot be executed on-chain because the smart c
     \texttt{ENC}_k(m) = c = \texttt{ENC}_k(m). \quad \forall m
     \label{eq:encryption-sceheme-deterministic-formula}
 \end{equation}
-The equation~\ref{eq:encryption-sceheme-deterministic-formula} shows that given the same message $m$, the same ciphertext  $c$ is always produced.
+Equation~\ref{eq:encryption-sceheme-deterministic-formula} shows that given the same message $m$, the same ciphertext  $c$ is always produced.
 Deterministic encryption scheme has been shown to be insecure~\cite{katz2020introduction} because if a sender wants to send to a specific receiver the same message two times an adversary $\mathcal{A}$ can understand that the message $m$ was submitted twice because they have seen $c$ flow two times on the network.
 Secure schemes such as RSA-OAEP and AES-GCM require a fresh random value per invocation~\cite{rfc8017, nist-sp-800-38d}; the EVM, having no trusted randomness source, cannot provide this.
 In addition, all the data sent to the smart contract, including the function call arguments, are visible and stored in the blockchain, so, if in a certain use-case is acceptable that $\texttt{ENC}_k$ is deterministic and the encryption were performed within the smart contract, the content of $m$ is in any case stored and visible over the blockchain.
@@ -700,7 +700,7 @@ The following subsections describe how the reward logic and bond system are enfo
 
 \subsection{DST token integration}\label{subsec:implementation-dst-integration}
 The adoption of a custom token instead of using ETH is justified because of a certain numbers of wanted aspects, like reentrancy protection, because ERC-20 has no callback and hooks to exploit to perform the attack~\cite{eip20}.
-The Table~\ref{tab:economic-model-eth-dst-comparison} shows a comparison between use ETH native and a custom ERC-20 token, like DST.
+Table~\ref{tab:economic-model-eth-dst-comparison} shows a comparison between use ETH native and a custom ERC-20 token, like DST.
 In addition, the absence of payable functions blocks the receiving of ETH by error, because solidity on compile time adds a check to avoid this type of errors~\cite{solidity-abi-spec}.
 
 The DST token is implemented thought the \texttt{DataSentTokenContract}, which implementation is shown in Listing~\ref{lst:proto-implementation-dst-contract}.
