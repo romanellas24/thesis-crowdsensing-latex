@@ -1,1 +1,74 @@
 \chapter{Conclusions}\label{ch:conclusions}
+This thesis presented the design, implementation, and evaluation of a
+privacy-preserving decentralised crowdsensing protocol based on smart contracts.
+This chapter summarizes the contributions of the work, discusses its
+limitations, and outlines directions for future research.
+
+\section{Summary of contributions}\label{sec:conclusion-contributions-summary}
+The work presented in this thesis covers three main areas: protocol design,
+implementation, and evaluation.
+
+In the design phase, \texttt{PrivacyFirstContract} was developed, building
+on the crowdsensing protocol proposed by Bedogni et al.~\cite{bedogni2024crowdsensing}.
+A subsequent security and incentive analysis identified several open issues,
+which were addressed in \texttt{PrivacySecondContract}, an extension that
+introduces a trusted verifier mechanism, a geographical reward decay, and
+a verifier penalty system.
+
+The implementation phase produced two Solidity smart contracts reflecting
+the above design, together with a TypeScript SDK layer that exposes a
+per-actor API and handles off-chain cryptographic operations, providing a
+complete reference implementation of the protocol.
+
+The evaluation phase assessed the contracts along three axes: gas
+consumption and its real-world cost across multiple networks, block
+capacity contention under concurrent campaign execution, and spatial
+coverage and reward distribution on a real-world taxi trajectory dataset
+from the city of Porto.
+
+\section{Limitations}\label{sec:conclusion-limitations}
+The work presented in this thesis has several limitations.
+
+The geographic simulation was conducted with at most 1\,000 senders due to
+RAM constraints on the test machine; a larger population could not be
+evaluated without dedicated infrastructure.
+Furthermore, the contracts were tested exclusively on a local Hardhat node
+and were not deployed on Ethereum mainnet or any L2 network, so the
+gas cost figures reported in Section~\ref{sec:gas-analysis} are based on
+local measurements rather than live network conditions.
+
+At the protocol level, the centrality of the campaign initiator $B$ remains
+an open issue: \texttt{PrivacySecondContract} does not eliminate $B$ as a
+trust point, as discussed in Section~\ref{sec:security-analysis-issues}.
+
+Finally, the ProVerif analysis described in Section~\ref{subsec:security-analysis-issues-proverif} assumes
+honest enrollment: the sender and verifier enrollment channels are modelled
+as private, so the attacker cannot enrol as a malicious participant.
+As a consequence, the formal verification only guarantees secrecy properties
+under this assumption; scenarios involving a compromised sender or verifier
+are outside the scope of the model, as noted in Appendix~\ref{ch:appendix-c-fifo-sc}.
+
+\section{Future work}\label{sec:conclusion-future-work}
+
+Several directions are open for future investigation.
+The centrality of the campaign initiator $B$ could be eliminated by replacing
+the current key distribution mechanism with Proxy Re-Encryption(PRE): senders
+would encrypt their data under their own public key, and a decentralised proxy
+network, such as the Threshold Network, would re-encrypt each ciphertext
+for the elected verifier without ever learning the plaintext, removing $B$ as
+an online trust point entirely.
+
+The formal security analysis could be strengthened by extending the ProVerif
+model to cover dishonest enrollment scenarios, or by porting the verification
+to CryptoVerif, which operates in the computational model and provides
+guarantees over concrete cryptographic primitives rather than perfect symbolic
+abstractions.
+
+On the evaluation side, the geographic simulation should be replicated on
+datasets with a more uniform spatial distribution, such as rural or
+multi-city traces, to assess the effectiveness of the reward decay mechanism
+beyond the concentrated urban setting of the Porto taxi fleet.
+Finally, the contracts should be deployed on a public testnet and subsequently
+on an L2 network to validate the gas cost figures reported in
+Section~\ref{sec:gas-analysis} under real network conditions and to measure
+end-to-end latency across all protocol phases.

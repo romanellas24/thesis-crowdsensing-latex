@@ -1,5 +1,654 @@
 \chapter{Evaluation}\label{ch:evaluation}
-\section{Simulation setup}\label{sec:simulation-setup}
-\section{Spatial simulation}\label{sec:spatial-simulation}
+
+The protocols designed in Chapter~\ref{ch:protocol-design} and implemented in
+Chapter~\ref{ch:implementation} are evaluated along two complementary axes.
+Section~\ref{sec:gas-analysis} analyses the gas consumption of the three
+contract variants, across a $4 \times 4$ scenario grid of sender and verifier counts, quantifying the cost
+of the swap-and-pop optimisation and the overhead introduced by the novel
+protocol extensions.
+Section~\ref{sec:proto-evaluation-concurrent-execution} examines the behaviour
+of the network under concurrent campaign load, showing that the per-block gas
+limit introduces a critical section that forces partial serialisation when
+multiple campaigns execute simultaneously.
+All analyses are expressed in absolute units of measure, such as gas units for
+computational cost and DST tokens for economic rewards.
+Finally, Section~\ref{sec:spatial-simulation} evaluates the behaviour of the protocol on a dataset of taxi traces from the city of Porto.
+
+
 \section{Gas cost analysis}\label{sec:gas-analysis}
+There are three contracts under analysis: \texttt{PFC}, \texttt{PSC}, and \texttt{FIFO}.
+\texttt{FIFO} shares the same base implementation as \texttt{PFC} but replaces the swap-and-pop pending list with a linear-shift FIFO approach.
+
+The methodology of these experiments is described in Section~\ref{subsec:gas-analysis-methodology}.
+Section~\ref{subsec:gas-pfc-vs-fifo} presents a comparison between the swap-and-pop data structure and FIFO queue.
+Section~\ref{subsec:gas-pfc-vs-psc} contains a comparison to show the overhead introduced by the novel features, i.e., the cost of extending \texttt{PFC} to \texttt{PSC}.
+
+Finally, Section~\ref{subsec:gas-real-world-costs} estimates the cost of organizing a crowdsensing campaign in USD.
+
+\subsection{Methodology}\label{subsec:gas-analysis-methodology}
+The test environment is based on Hardhat, the experiments are executed on a simulated Ethereum environment on the \texttt{cancun} hardfork was selected to avoid the per-transaction gas cap of $2^{24}$ gas introduced by EIP-7825~\cite{eip7825} in the Fusaka hard fork.
+In addition, the gas limit per block is modified to $10^9$ to avoid interruption on worst-case.
+
+A grid of scenarios, a grid made with a dimension of $4\times 4$, the scenarios are a combination between
+\begin{gather*}
+    \forall S \in \{1, 10, 100, 1000\}\\
+    \forall V \in \{2, 10, 100, 1000\}\\
+\end{gather*}
+A grid of scenarios in Table~\ref{tab:proto-evaluation-scenario-grid}
+\begin{table}
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        & $V = 2$ & $V = 10$ & $V = 100$ & $V = 1000$ \\
+        \hline
+        $S = 1$ & \shortstack{S: 1\\V: 2} & \shortstack{S: 1\\V: 10} & \shortstack{S: 1\\V: 100} & \shortstack{S: 1\\V: 1000} \\
+        \hline
+        $S = 10$ & \shortstack{S: 10\\V: 2} & \shortstack{S: 10\\V: 10} & \shortstack{S: 10\\V: 100} & \shortstack{S: 10\\V: 1000} \\
+        \hline
+        $S = 100$ & \shortstack{S: 100\\V: 2} & \shortstack{S: 100\\V: 10} & \shortstack{S: 100\\V: 100} & \shortstack{S: 100\\V: 1000} \\
+        \hline
+        $S = 1000$ & \shortstack{S: 1000\\V: 2} & \shortstack{S: 1000\\V: 10} & \shortstack{S: 1000\\V: 100} & \shortstack{S: 1000\\V: 1000} \\
+        \hline
+    \end{tabular}
+    \caption{Simulation scenarios: 16 combinations of sender and verifier cardinalities.}
+    \label{tab:proto-evaluation-scenario-grid}
+\end{table}
+
+Each scenario submits 10,000 CIDs. All participants are assumed to behave honestly, following the happy path of the protocol.
+
+The results report gas units.
+First call operations are highlighted because first calls initialize storage slots, incurring higher costs due to cold SSTORE operations.
+
+\subsection{Baseline cost breakdown of PFC}\label{subsec:gas-pfc-baseline}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\linewidth]{diagrams/proto-evaluation-pfc_gas_per_operation_100s_100v}
+    \caption[Per-operation gas cost of \texttt{PFC}, first call vs subsequent calls.]{%
+        Per-operation gas cost of \texttt{PrivacyFirstContract} scenario $100\,\text{S} \times 100\,\text{V}$.
+        Operations that do not allocate new storage slots show no premium.}
+    \label{fig:proto-evaluation-pfc-per-operation}
+\end{figure}
+
+Figure~\ref{fig:proto-evaluation-pfc-per-operation} shows a comparison between the first call and subsequent ones.
+
+The \texttt{data\_submission} function requires 194k gas units for the first call and an average of 165k for subsequent ones. It is the most expensive function in the smart contract; this cost is justified by SSTOREs, event emission, and input checks.
+
+The owner function that executes $K_{dec}$ delivery, \texttt{owner\_send\_kdec}, averages 133k gas units, with no significant difference from the first call.
+
+The \texttt{verification\_request} function has a cost dominated by iteration over the pending data structure.
+
+The \texttt{verification\_submit} function exhibits behaviour that will be explained in Section~\ref{subsec:gas-pfc-vs-fifo}; all other operations include an SSTORE and a DST transfer that increase gas usage.
+
+Per-operation gas costs of \texttt{PrivacyFirstContract}, summarised across
+the 16 simulated scenarios, are shown in Table~\ref{tab:proto-evaluation-pfc-per-operation-summary}.
+The \emph{1st call} column reports the gas consumed by the first invocation of each operation.
+The \emph{Avg subsequent} column reports the mean across scenarios of the per-scenario average; the \emph{Range} column gives the
+$[\min, \max]$ interval of that same metric.
+The narrow range confirms that per-call cost is a property of the contract, not of the workload.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|l|r|r|r|}
+        \hline
+        Operation                         & 1st call & Avg subsequent & Range              \\
+        \hline
+        \texttt{sender\_upload\_pubkey}   & 72,671   & 72,671         & [72,671, 72,671]   \\
+        \hline
+        \texttt{owner\_send\_kenc}        & 95,327   & 95,325         & [95,324, 95,326]   \\
+        \hline
+        \texttt{verifier\_upload\_pubkey} & 92,871   & 92,871         & [92,871, 92,871]   \\
+        \hline
+        \texttt{owner\_send\_kdec}        & 133,543  & 133,542        & [133,501, 134,000] \\
+        \hline
+        \texttt{sender\_pay\_bond}        & 104,354  & 87,254         & [87,254, 87,254]   \\
+        \hline
+        \texttt{verifier\_pay\_bond}      & 82,192   & 65,092         & [65,092, 65,092]   \\
+        \hline
+        \texttt{data\_submission}         & 193,677  & 165,620        & [165,280, 166,509] \\
+        \hline
+        \texttt{verification\_request}    & 101,557  & 91,086         & [90,711, 92,067]   \\
+        \hline
+        \texttt{verification\_submit}     & 49,694   & 98,634         & [97,336, 102,023]  \\
+        \hline
+    \end{tabular}
+    \caption{Per-operation gas cost of PFC, averaged across the 16 simulated scenarios.}
+    \label{tab:proto-evaluation-pfc-per-operation-summary}
+\end{table}
+
+\subsection{PFC and FIFO pending list management}\label{subsec:gas-pfc-vs-fifo}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-pfc_vs_fifo_submit_overlay_1000s_1000v}
+    \caption[Per-call gas of \texttt{verification\_submit}: PFC vs FIFO baseline.]{%
+        Per-call gas consumption of \texttt{verification\_submit} in the
+        $1000\,\text{S} \times 1000\,\text{V}$ scenario.
+        The dashed line marks the EIP-7825 per-transaction gas cap
+        of \(2^{24}\)\,gas, active from the Fusaka hard fork.}
+    \label{fig:proto-evaluation-pfc-vs-fifo-submit-overlay}
+\end{figure}
+
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.9\linewidth]{diagrams/proto-evaluation-eip7825_feasibility_normalized}
+    \caption{FIFO baseline infeasibility under EIP-7825 across all scenarios.}
+    \label{fig:proto-evaluation-eip7825-feasibility}
+\end{figure}
+
+\texttt{PrivacyFirstContract} applies a swap-and-pop approach to the \texttt{\_removeFromPending} function.
+Deletion runs in $O(1)$, but order is not preserved.
+
+In this context, it is necessary to introduce a new smart contract implementing a FIFO queue for pending data awaiting verification, as shown in Listing~\ref{lst:chap-c-fifo-contract}.
+This smart contract is a variant that inherits all functions from \texttt{PFC} and overrides \texttt{\_addToPending} and \texttt{\_removeFromPending} to implement a FIFO strategy.
+
+For the \texttt{verification\_submit} function, Figure~\ref{fig:proto-evaluation-pfc-vs-fifo-submit-overlay} plots the gas consumption per call for the \texttt{PFC} and \texttt{FIFO} contracts.
+The comparison is clear: \texttt{PFC} gas usage falls in the range $[120, 300]\,\text{k}$ gas units and becomes constant after 2\,500 submissions.
+
+For the \texttt{FIFO} contract the situation is different: there are two types of submissions: those that do not complete a verification process, and those that trigger one.
+If a verification submission completes a verification process, the verified data is removed from the pending data structure; \texttt{\_removeFromPending} is therefore called, and in the \texttt{FIFO} contract this causes a left-shift of every subsequent entry.
+
+Additionally, the two contracts differ in gas usage for the following functions:
+\begin{itemize}
+    \item \texttt{verification\_request}: the \texttt{FIFO} contract must iterate more times to satisfy the cooldown constraint;
+    \item \texttt{data\_submission}: \texttt{FIFO} is cheaper than \texttt{PFC} by $22\,\text{k}$ gas units.
+\end{itemize}
+
+Despite the \texttt{data\_submission} savings, PFC's advantage of $14\,\text{M}$ gas units per \texttt{verification\_submit} call far outweighs the $22\,\text{k} \times 10000 = 220\,\text{M}$ gas units saved by FIFO across all data submissions.
+
+Figure~\ref{fig:proto-evaluation-eip7825-feasibility} shows the ratio of worst-case \texttt{verification\_submit} gas to the
+EIP-7825 cap, for each of the 16 scenarios.
+
+Values above $1.0$ indicate scenarios where the contract is infeasible on a Fusaka-era chain.
+\texttt{PrivacyFirstContract} stays consistently below $0.02$, two orders of magnitude under the cap.
+\texttt{PrivacyFirstContractFifo} exceeds the cap in all scenarios by a factor of $\approx 3.4\times$.
+
+The ratio is independent of \((senders, verifiers)\) because the
+worst-case shift cost is driven by \texttt{TOTAL\_CIDS}, not by the
+actor count.
+
+A full comparison of gas usage between the two protocols is shown in Table~\ref{tab:pfc-vs-fifo-max-submit}. For all scenarios, the maximum gas for both protocols is participant-independent, as evidenced by identical values across all rows.
+For the \texttt{FIFO} contract the ratio with the EIP-7825 limit exceeds one, so with $10,000$ CIDs \texttt{FIFO} is not feasible.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|l|r|r|r|r|}
+        \hline
+        Scenario                               & PFC max (gas) & FIFO max (gas) & Ratio FIFO/PFC & FIFO/EIP-7825 \\
+        \hline
+        $1\,\text{S} \times 2\,\text{V}$       & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1\,\text{S} \times 10\,\text{V}$      & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1\,\text{S} \times 100\,\text{V}$     & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1\,\text{S} \times 1000\,\text{V}$    & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $10\,\text{S} \times 2\,\text{V}$      & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        \ldots                                 & \ldots        & \ldots         & \ldots         & \ldots        \\
+        \hline
+        $100\,\text{S} \times 1000\,\text{V}$  & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1000\,\text{S} \times 2\,\text{V}$    & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1000\,\text{S} \times 10\,\text{V}$   & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1000\,\text{S} \times 100\,\text{V}$  & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+        $1000\,\text{S} \times 1000\,\text{V}$ & 284,522       & 56,541,167     & 198.7$\times$  & 3.4$\times$   \\
+        \hline
+    \end{tabular}
+    \caption{Worst-case \texttt{verification\_submit} gas: PFC vs FIFO.}
+    \label{tab:pfc-vs-fifo-max-submit}
+\end{table}
+
+\subsection{PFC and PSC feature overhead}\label{subsec:gas-pfc-vs-psc}
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-psc_vs_pfc_overhead_1s_2v}
+    \caption{Operations common to PFC and PSC. Percentage deltas
+    annotated on each pair.}
+    \label{fig:proto-evaluation-psc-overhead-common}
+\end{figure}
+
+\texttt{PrivacySecondContract} inherits \texttt{PrivacyFirstContract} functions and implements the features described in Section~\ref{sec:addressing-issues}.
+
+Each feature has a measurable gas cost; this section therefore evaluates the overhead of each implemented feature and identifies which contributes most.
+
+Figure~\ref{fig:proto-evaluation-psc-overhead-common} shows the variation in gas usage for functions common to both contracts.
+\begin{itemize}
+    \item \textbf{Deployment}: bytecode size increases by $15.8\%$ due to the additional bytecode;
+    \item \texttt{data\_submission}: gas usage increases by $20.7\%$ due to the computation of the decayed reward for each submission;
+    \item \texttt{verification\_submit}: increases by $9.1\%$ due to verifier vote tracking (correct and incorrect) and a newly introduced \texttt{require} check;
+    \item \texttt{owner\_send\_kdec}: gas usage decreases by $55.5\%$, as the function now only emits an event, registers a mapping for the accepted verifier, and stores the Verifier struct.
+\end{itemize}
+
+\texttt{PrivacySecondContract} does not alter the behaviour of existing functions, but introduces new ones with their own costs, as shown in Figure~\ref{fig:proto-evaluation-psc-overhead-only}.
+The three new functions are:
+\begin{itemize}
+    \item \texttt{owner\_notify\_key\_ready}: consumes $76\,\text{k}$ gas units after the creation of the per-data key pair.
+    \item \texttt{owner\_deliver\_bundle}: uses $63\,\text{k}$ gas units to deliver the verification bundle: containing the per-data decryption key to the verifier.
+    \item \texttt{owner\_kick\_verifier}: penalty path, invoked by the owner against malicious verifiers; costs $30\,\text{k}$ gas units.
+\end{itemize}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-psc_only_operations_1s_2v}
+    \caption{Operations introduced by PSC that have no PFC counterpart.}
+    \label{fig:proto-evaluation-psc-overhead-only}
+\end{figure}
+
+Table~\ref{tab:proto-evaluation-psc-overhead-1000s-1000v} reports the per-operation gas cost of \texttt{PrivacySecondContract} compared to
+\texttt{PrivacyFirstContract} in the $1000\,\text{S} \times 1000\,\text{V}$ scenario.
+The upper section lists operations common to both contracts;
+the lower section lists operations introduced by the extended
+protocol of Section~\ref{sec:addressing-issues} that are absent from \texttt{PrivacyFirstContract}.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|l|r|r|r|r|}
+        \hline
+        Operation                          & PFC (gas) & PSC (gas) & $\Delta$ (gas) & $\Delta$ (\%) \\
+        \hline
+        \multicolumn{5}{l}{\textit{Operations common to PFC and PSC}} \\
+        \hline
+        \texttt{contract\_deployment}      & 4,379,691 & 5,070,783 & +691,092       & +15.8\%       \\
+        \hline
+        \texttt{sender\_upload\_pubkey}    & 72,671    & 72,693    & +22            & +0.0\%        \\
+        \hline
+        \texttt{owner\_send\_kenc}         & 95,326    & 95,383    & +57            & +0.1\%        \\
+        \hline
+        \texttt{verifier\_upload\_pubkey}  & 92,871    & 92,893    & +22            & +0.0\%        \\
+        \hline
+        \texttt{owner\_send\_kdec}         & 133,512   & 59,378    & -74,134        & -55.5\%       \\
+        \hline
+        \texttt{sender\_pay\_bond}         & 87,254    & 87,276    & +22            & +0.0\%        \\
+        \hline
+        \texttt{verifier\_pay\_bond}       & 65,092    & 65,092    & +0             & +0.0\%        \\
+        \hline
+        \texttt{data\_submission}          & 166,509   & 200,735   & +34,226        & +20.6\%       \\
+        \hline
+        \texttt{verification\_request}     & 92,067    & 90,781    & -1,286         & -1.4\%        \\
+        \hline
+        \texttt{verification\_submit}      & 102,023   & 110,920   & +8,897         & +8.7\%        \\
+        \hline
+        \multicolumn{5}{l}{\textit{Operations exclusive to PSC}} \\
+        \hline
+        \texttt{owner\_notify\_key\_ready} & -         & 76,601    & -              & -             \\
+        \hline
+        \texttt{owner\_deliver\_bundle}    & -         & 62,734    & -              & -             \\
+        \hline
+        \texttt{owner\_kick\_verifier}     & -         & 30,053    & -              & -             \\
+        \hline
+    \end{tabular}
+    \caption{Per-operation PSC overhead over PFC at $1000\,\text{S} \times 1000\,\text{V}$.}
+    \label{tab:proto-evaluation-psc-overhead-1000s-1000v}
+\end{table}
+
+\subsection{Real-world deployment costs across networks}\label{subsec:gas-real-world-costs}
+Gas costs exist to prevent replay attacks and to incentivize verifiers to stake their funds and validate new blocks.
+The formula to evaluate the USD cost of a certain gas usage is the following:
+\begin{equation}
+    \text{GAS}_{\text{COST}} = \text{GAS}_{\text{USED}} \times \text{GAS}_{\text{PRICE}} \times \text{TOKEN}_{\text{COST}}
+    \label{eq:proto-evaluation-gas-costs}
+\end{equation}
+The equation~\ref{eq:proto-evaluation-gas-costs} explains how the $\text{GAS}_{\text{COST}}$ is calculated as a function of the gas used, the gas price, and the native network token cost.
+
+Tables~\ref{tab:proto-evaluation-merged-fifo},~\ref{tab:proto-evaluation-merged-pfc} and ~\ref{tab:proto-evaluation-merged-psc} show a comparison between the roles in the $1000\,\text{S} \times 1000\,\text{V}$ scenario, respectively for \texttt{FIFO}, \texttt{PFC} and \texttt{PSC} contracts.
+For verifiers and senders, the gas is calculated per actor; the mean, median, minimum, and maximum gas usage are reported.
+In addition, for each network all gas usage data are reported, while the corresponding gas cost reflects the selected network
+
+The Table~\ref{tab:proto-evaluation-gas-cost} shows the gas cost and the token cost for each network.
+The data used are the median values for each category recorded in 2025.
+The median was chosen because it is robust to outliers.
+\begin{table}
+    \centering
+    \begin{tabular}{|c|c|c|}
+        \hline
+        Token & $\text{GAS}_{\text{PRICE}}$ & $\text{TOKEN}_{USD}$ \\
+        \hline
+        Arbitrum (ARB) & $0.0169$ & $0.381549$ \\
+        \hline
+        Binance Coin (BNB) & $1.0889$ & $696.734456$ \\
+        \hline
+        Ethereum (ETH) & $2.0980$ & $2977.162263$ \\
+        \hline
+        Gnosis (GNO) & $3.3204$ & $131.286112$ \\
+        \hline
+        Optimism (OP) & $0.0153$ & $0.706806$ \\
+        \hline
+        Polygon (POL) & $76.8760$ & $0.225441$ \\
+        \hline
+    \end{tabular}%
+    \caption{Token prices and gas price used in the evaluation}
+    \label{tab:proto-evaluation-gas-cost}
+\end{table}
+
+\begin{table}
+    \centering
+    \resizebox{\textwidth}{!}{%
+        \begin{tabular}{|ll |lrrr| rrrr|}
+            \hline
+            Token                 & Role              & Gas mean    & Gas median  & Gas min     & Gas max     & USD mean   & USD median & USD min    & USD max    \\
+            \hline
+            \multirow{3}{*}{ARB}  & \texttt{owner}    & 233,345,642 & 233,345,642 & 233,345,642 & 233,345,642 & \$0.001505 & \$0.001505 & \$0.001505 & \$0.001505 \\
+            & \texttt{sender}   & 1,603,363   & 1,601,623   & 1,601,623   & 1,650,099   & \$0.000010 & \$0.000010 & \$0.000010 & \$0.000011 \\
+            & \texttt{verifier} & 285,325,886 & 271,285,028 & 3,083,235   & 595,692,881 & \$0.001840 & \$0.001749 & \$0.000020 & \$0.003841 \\
+            \hline
+            \multirow{3}{*}{BNB}  & \texttt{owner}    & 233,345,642 & 233,345,642 & 233,345,642 & 233,345,642 & \$177.03   & \$177.03   & \$177.03   & \$177.03   \\
+            & \texttt{sender}   & 1,603,363   & 1,601,623   & 1,601,623   & 1,650,099   & \$1.22     & \$1.22     & \$1.22     & \$1.25     \\
+            & \texttt{verifier} & 285,325,886 & 271,285,028 & 3,083,235   & 595,692,881 & \$216.47   & \$205.82   & \$2.34     & \$451.94   \\
+            \hline
+            \multirow{3}{*}{ETH}  & \texttt{owner}    & 233,345,642 & 233,345,642 & 233,345,642 & 233,345,642 & \$1,457.50 & \$1,457.50 & \$1,457.50 & \$1,457.50 \\
+            & \texttt{sender}   & 1,603,363   & 1,601,623   & 1,601,623   & 1,650,099   & \$10.01    & \$10.00    & \$10.00    & \$10.31    \\
+            & \texttt{verifier} & 285,325,886 & 271,285,028 & 3,083,235   & 595,692,881 & \$1,782.17 & \$1,694.47 & \$19.26    & \$3,720.75 \\
+            \hline
+            \multirow{3}{*}{GNO}  & \texttt{owner}    & 233,345,642 & 233,345,642 & 233,345,642 & 233,345,642 & \$101.72   & \$101.72   & \$101.72   & \$101.72   \\
+            & \texttt{sender}   & 1,603,363   & 1,601,623   & 1,601,623   & 1,650,099   & \$0.6989   & \$0.6982   & \$0.6982   & \$0.7193   \\
+            & \texttt{verifier} & 285,325,886 & 271,285,028 & 3,083,235   & 595,692,881 & \$124.38   & \$118.26   & \$1.34     & \$259.68   \\
+            \hline
+            \multirow{3}{*}{OP}   & \texttt{owner}    & 233,345,642 & 233,345,642 & 233,345,642 & 233,345,642 & \$0.002523 & \$0.002523 & \$0.002523 & \$0.002523 \\
+            & \texttt{sender}   & 1,603,363   & 1,601,623   & 1,601,623   & 1,650,099   & \$0.000017 & \$0.000017 & \$0.000017 & \$0.000018 \\
+            & \texttt{verifier} & 285,325,886 & 271,285,028 & 3,083,235   & 595,692,881 & \$0.003086 & \$0.002934 & \$0.000033 & \$0.006442 \\
+            \hline
+            \multirow{3}{*}{POLY} & \texttt{owner}    & 233,345,642 & 233,345,642 & 233,345,642 & 233,345,642 & \$4.04     & \$4.04     & \$4.04     & \$4.04     \\
+            & \texttt{sender}   & 1,603,363   & 1,601,623   & 1,601,623   & 1,650,099   & \$0.0278   & \$0.0278   & \$0.0278   & \$0.0286   \\
+            & \texttt{verifier} & 285,325,886 & 271,285,028 & 3,083,235   & 595,692,881 & \$4.94     & \$4.70     & \$0.0534   & \$10.32    \\
+            \hline
+        \end{tabular}%
+    }
+    \caption{Per-role gas and USD cost: $1000\,\text{S} \times 1000\,\text{V}$ - FIFO.}
+    \label{tab:proto-evaluation-merged-fifo}
+\end{table}
+
+\begin{table}
+    \centering
+    \resizebox{\textwidth}{!}{%
+        \begin{tabular}{|ll |lrrr| rrrr|}
+            \hline
+            Token                 & Role              & Gas mean    & Gas median  & Gas min     & Gas max     & USD mean   & USD median & USD min    & USD max    \\
+            \hline
+            \multirow{3}{*}{ARB}  & \texttt{owner}    & 233,323,743 & 233,323,743 & 233,323,743 & 233,323,743 & \$0.001505 & \$0.001505 & \$0.001505 & \$0.001505 \\
+            & \texttt{sender}   & 1,825,063   & 1,823,343   & 1,823,343   & 1,851,919   & \$0.000012 & \$0.000012 & \$0.000012 & \$0.000012 \\
+            & \texttt{verifier} & 4,039,766   & 4,036,867   & 3,041,701   & 5,085,633   & \$0.000026 & \$0.000026 & \$0.000020 & \$0.000033 \\
+            \hline
+            \multirow{3}{*}{BNB}  & \texttt{owner}    & 233,323,743 & 233,323,743 & 233,323,743 & 233,323,743 & \$177.02   & \$177.02   & \$177.02   & \$177.02   \\
+            & \texttt{sender}   & 1,825,063   & 1,823,343   & 1,823,343   & 1,851,919   & \$1.38     & \$1.38     & \$1.38     & \$1.41     \\
+            & \texttt{verifier} & 4,039,766   & 4,036,867   & 3,041,701   & 5,085,633   & \$3.06     & \$3.06     & \$2.31     & \$3.86     \\
+            \hline
+            \multirow{3}{*}{ETH}  & \texttt{owner}    & 233,323,743 & 233,323,743 & 233,323,743 & 233,323,743 & \$1,457.36 & \$1,457.36 & \$1,457.36 & \$1,457.36 \\
+            & \texttt{sender}   & 1,825,063   & 1,823,343   & 1,823,343   & 1,851,919   & \$11.40    & \$11.39    & \$11.39    & \$11.57    \\
+            & \texttt{verifier} & 4,039,766   & 4,036,867   & 3,041,701   & 5,085,633   & \$25.23    & \$25.21    & \$19.00    & \$31.77    \\
+            \hline
+            \multirow{3}{*}{GNO}  & \texttt{owner}    & 233,323,743 & 233,323,743 & 233,323,743 & 233,323,743 & \$101.71   & \$101.71   & \$101.71   & \$101.71   \\
+            & \texttt{sender}   & 1,825,063   & 1,823,343   & 1,823,343   & 1,851,919   & \$0.7956   & \$0.7948   & \$0.7948   & \$0.8073   \\
+            & \texttt{verifier} & 4,039,766   & 4,036,867   & 3,041,701   & 5,085,633   & \$1.76     & \$1.76     & \$1.33     & \$2.22     \\
+            \hline
+            \multirow{3}{*}{OP}   & \texttt{owner}    & 233,323,743 & 233,323,743 & 233,323,743 & 233,323,743 & \$0.002523 & \$0.002523 & \$0.002523 & \$0.002523 \\
+            & \texttt{sender}   & 1,825,063   & 1,823,343   & 1,823,343   & 1,851,919   & \$0.000020 & \$0.000020 & \$0.000020 & \$0.000020 \\
+            & \texttt{verifier} & 4,039,766   & 4,036,867   & 3,041,701   & 5,085,633   & \$0.000044 & \$0.000044 & \$0.000033 & \$0.000055 \\
+            \hline
+            \multirow{3}{*}{POLY} & \texttt{owner}    & 233,323,743 & 233,323,743 & 233,323,743 & 233,323,743 & \$4.04     & \$4.04     & \$4.04     & \$4.04     \\
+            & \texttt{sender}   & 1,825,063   & 1,823,343   & 1,823,343   & 1,851,919   & \$0.0316   & \$0.0316   & \$0.0316   & \$0.0321   \\
+            & \texttt{verifier} & 4,039,766   & 4,036,867   & 3,041,701   & 5,085,633   & \$0.0700   & \$0.0700   & \$0.0527   & \$0.0881   \\
+            \hline
+        \end{tabular}%
+    }
+    \caption{Per-role gas and USD cost: $1000\,\text{S} \times 1000\,\text{V}$ - PFC.}
+    \label{tab:proto-evaluation-merged-pfc}
+\end{table}
+
+\begin{table}
+
+    \centering
+    \resizebox{\textwidth}{!}{%
+        \begin{tabular}{|ll |lrrr| rrrr|}
+            \hline
+            Token                 & Role              & Gas mean      & Gas median    & Gas min       & Gas max       & USD mean    & USD median  & USD min     & USD max     \\
+            \hline
+            \multirow{3}{*}{ARB}  & \texttt{owner}    & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & \$0.0141    & \$0.0141    & \$0.0141    & \$0.0141    \\
+            & \texttt{sender}   & 2,167,395     & 2,165,677     & 2,165,181     & 2,217,449     & \$0.000014  & \$0.000014  & \$0.000014  & \$0.000014  \\
+            & \texttt{verifier} & 4,192,008     & 4,189,109     & 3,100,083     & 5,331,735     & \$0.000027  & \$0.000027  & \$0.000020  & \$0.000034  \\
+            \hline
+            \multirow{3}{*}{BNB}  & \texttt{owner}    & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & \$1,654.40  & \$1,654.40  & \$1,654.40  & \$1,654.40  \\
+            & \texttt{sender}   & 2,167,395     & 2,165,677     & 2,165,181     & 2,217,449     & \$1.64      & \$1.64      & \$1.64      & \$1.68      \\
+            & \texttt{verifier} & 4,192,008     & 4,189,109     & 3,100,083     & 5,331,735     & \$3.18      & \$3.18      & \$2.35      & \$4.05      \\
+            \hline
+            \multirow{3}{*}{ETH}  & \texttt{owner}    & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & \$13,620.54 & \$13,620.54 & \$13,620.54 & \$13,620.54 \\
+            & \texttt{sender}   & 2,167,395     & 2,165,677     & 2,165,181     & 2,217,449     & \$13.54     & \$13.53     & \$13.52     & \$13.85     \\
+            & \texttt{verifier} & 4,192,008     & 4,189,109     & 3,100,083     & 5,331,735     & \$26.18     & \$26.17     & \$19.36     & \$33.30     \\
+            \hline
+            \multirow{3}{*}{GNO}  & \texttt{owner}    & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & \$950.59    & \$950.59    & \$950.59    & \$950.59    \\
+            & \texttt{sender}   & 2,167,395     & 2,165,677     & 2,165,181     & 2,217,449     & \$0.9448    & \$0.9441    & \$0.9439    & \$0.9666    \\
+            & \texttt{verifier} & 4,192,008     & 4,189,109     & 3,100,083     & 5,331,735     & \$1.83      & \$1.83      & \$1.35      & \$2.32      \\
+            \hline
+            \multirow{3}{*}{OP}   & \texttt{owner}    & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & \$0.0236    & \$0.0236    & \$0.0236    & \$0.0236    \\
+            & \texttt{sender}   & 2,167,395     & 2,165,677     & 2,165,181     & 2,217,449     & \$0.000023  & \$0.000023  & \$0.000023  & \$0.000024  \\
+            & \texttt{verifier} & 4,192,008     & 4,189,109     & 3,100,083     & 5,331,735     & \$0.000045  & \$0.000045  & \$0.000034  & \$0.000058  \\
+            \hline
+            \multirow{3}{*}{POLY} & \texttt{owner}    & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & 2,180,651,354 & \$37.79     & \$37.79     & \$37.79     & \$37.79     \\
+            & \texttt{sender}   & 2,167,395     & 2,165,677     & 2,165,181     & 2,217,449     & \$0.0376    & \$0.0375    & \$0.0375    & \$0.0384    \\
+            & \texttt{verifier} & 4,192,008     & 4,189,109     & 3,100,083     & 5,331,735     & \$0.0727    & \$0.0726    & \$0.0537    & \$0.0924    \\
+            \hline
+        \end{tabular}%
+    }
+    \caption{Per-role gas and USD cost: $1000\,\text{S} \times 1000\,\text{V}$ - PSC.}
+    \label{tab:proto-evaluation-merged-psc}
+\end{table}
+
+The most expensive role is the owner, not only because they have to supply the \texttt{DST} tokens to distribute as rewards, but also because they hold the role with the highest gas usage for \texttt{PFC} and \texttt{PSC} contracts. For \texttt{FIFO}, the most expensive role is the verifier, due to the higher gas usage caused by the handling of the pending IDs data structure.
+The sender, in every scenario, has the lowest consumption, because in every protocol the submission is straightforward to register and requires only a few SSTORE operations.
+The difference between \texttt{FIFO} and \texttt{PFC} is evident in verifier gas costs, amounting to approximately $1,740\text{USD}$ on the Ethereum network.
+The additional functionality of \texttt{PSC} compared to \texttt{PFC} has a cost of about  $12,000 \text{USD}$ on Ethereum network.
+
+
+
+\section{Block Saturation Under Concurrent Campaigns}\label{sec:proto-evaluation-concurrent-execution}
+The Ethereum blockchain enforces a per-block gas limit, set to $60\text{,}000\text{,}000$
+gas units under the Fusaka hard fork~\cite{eip7935}, which bounds the total computational
+work that validators may include in a single block~\cite{wood2014ethereum}.
+This experiment aims to verify whether this constraint introduces a critical section on
+block capacity when multiple campaigns execute concurrently.
+To this end, the block count consumed by each campaign is measured as a function of the number of concurrent campaigns~$N$.
+
+\subsection{Gas Consumption Baseline}\label{subsec:proto-evaluation-concurrent-execution-baseline}
+The gas consumption of every contract is reported in
+Tables~\ref{tab:proto-evaluation-merged-fifo},~\ref{tab:proto-evaluation-merged-pfc},~and~\ref{tab:proto-evaluation-merged-psc}.
+\texttt{PFC} is the contract with the lowest gas consumption.
+This experiment was conducted using \texttt{PFC}, because if multiple concurrent
+executions of \texttt{PFC} exhibit a critical section over the per-block gas limit,
+then contracts with a higher gas consumption will necessarily exhibit the same contention.
+For this reason, \texttt{PFC} was chosen as the baseline.
+
+\subsection{Experimental Setup}\label{subsec:proto-evaluation-concurrent-execution-setup}
+The simulation was executed on a local Hardhat EVM node configured with a block
+gas limit of $60\text{,}000\text{,}000$ gas~\cite{eip7935} and interval mining
+at $200\,\text{ms}$, so that blocks are produced at a fixed cadence regardless
+of mempool pressure.
+Between each batch of $N$ campaigns, the chain state was
+reset via \texttt{hardhat\_reset} to ensure independent measurements.
+
+Each campaign runs the \texttt{PFC} contract with $1\text{,}000$ senders,
+$100$ verifiers, $5\text{,}000$ CIDs, and \texttt{checksRequired}$= 3$.
+Every actor belongs to exactly one campaign; no wallets are shared across
+campaigns.
+Concurrency is achieved by launching all $N$ campaign runners
+inside a single \texttt{Promise.all}, so that transactions from different
+campaigns interleave in the mempool and compete for block space under the
+shared gas limit.
+The values of $N$ evaluated are $N \in \{1, 2, 4\}$.
+
+The metric recorded for each campaign is the number of Ethereum blocks
+consumed, defined as $\Delta b = b_{\mathrm{end}} - b_{\mathrm{start}}$,
+where $b_{\mathrm{start}}$ is the block number snapshotted immediately before
+\texttt{Promise.all} fires and $b_{\mathrm{end}}$ is the block number of the
+last confirmed transaction of that campaign. Wall-clock time is intentionally
+excluded, as it reflects the speed of the local Hardhat node rather than
+mainnet behaviour.
+
+\subsection{Results and analysis}\label{subsec:proto-evaluation-concurrent-execution-results-analysis}
+
+Table~\ref{tab:concurrent-blocks} reports the mean block count consumed per
+campaign as a function of $N$ for \texttt{PFC}, together with the individual
+per-campaign values.
+
+\begin{table}
+    \centering
+    \begin{tabular}{|r|r|r|r|}
+        \hline
+        $N$ & Mean blocks & Ratio vs.\ $N{=}1$ & Per-campaign blocks \\
+        \hline
+        1 & 21\,564 & $1.00\times$ & $[21\,564]$ \\
+        \hline
+        2 & 34\,160 & $1.58\times$ & $[34\,145,\ 34\,176]$ \\
+        \hline
+        4 & 78\,627 & $3.65\times$ & $[78\,732,\ 78\,538,\ 78\,753,\ 78\,485]$ \\
+        \hline
+    \end{tabular}
+    \caption{Blocks consumed per campaign under concurrent execution (\texttt{PFC},
+        $1\text{,}000$ senders, $100$ verifiers, $5\text{,}000$ CIDs).}
+    \label{tab:concurrent-blocks}
+\end{table}
+
+As $N$ increases, each campaign consumes measurably more blocks than it would
+in isolation. At $N = 4$, the mean block count reaches $3.65\times$ the
+single-campaign baseline, approaching the theoretical upper bound of $4\times$
+that would result from complete serialization of all campaigns onto a single
+shared block stream. This directly evidences a critical section on block
+capacity: concurrent campaigns compete for the $60\text{,}000\text{,}000$-gas
+per-block limit~\cite{eip7935}, forcing partial serialization of their
+transactions.
+
+\section{Spatial simulation}\label{sec:spatial-simulation}
+Section~\ref{subsec:addressing-issues-geographical-incentive-issue} describes a
+mechanism to address the geographical incentive imbalance.
+The following simulation aims to empirically validate the implemented solution,
+using the Taxi Trajectory dataset from Porto~\cite{taxi_trajectory_ecml2015}.
+
+\subsection{Experimental setup}\label{subsec:spatial-setup}
+The experiment is conducted over the city of Porto using the taxi trajectory
+dataset~\cite{taxi_trajectory_ecml2015}.
+The grid comprises $10$ chunks per side, for a total of $100$ chunks.
+The campaign area is a square of approximately $28\,\text{km}$ per side, where
+each chunk covers approximately $2{.}8\,\text{km} \times 2{.}1\,\text{km}$.
+The origin of the area, located at the south-west corner, is at
+$41.14\text{°N}$, $8.61\text{°W}$.
+The experiment is conducted with $500$ and $1\text{,}000$ senders; since
+coverage increases by only $3$ chunks between the two configurations, only the
+results for the $1\text{,}000$-sender scenario are presented.
+Each taxi trajectory is associated with a distinct sender, and each chunk
+accepts a maximum of $10\text{,}000$ data entries.
+
+\subsection{Spatial coverage}\label{subsec:spatial-coverage}
+\begin{table}
+    \centering
+    \begin{tabular}{|r|r|c|r|}
+        \hline
+        \textbf{Senders} & \textbf{Total CIDs} & \textbf{Covered chunks} &
+        \textbf{Coverage} \\
+        \hline
+        500  &  21\,408 & 47 / 100 & 47\% \\
+        \hline
+        1000 &  45\,554 & 50 / 100 & 50\% \\
+        \hline
+    \end{tabular}
+    \caption{Spatial coverage results for the Porto taxi dataset across different
+    numbers of senders. The grid consists of 100 chunks
+        (\lstinline{chunk4Side} = 10, \lstinline{maximumDataPerChunk} = 10\,000).
+        Coverage saturates at 50\% between $N = 500$ and $N = 1\text{,}000$,
+        reflecting the geographic concentration of the Porto taxi fleet rather than
+        a protocol limitation.}
+    \label{tab:proto-evaluation-spatial-coverage}
+\end{table}
+
+Table~\ref{tab:proto-evaluation-spatial-coverage} shows how chunk coverage
+varies across the two simulation configurations.
+The coverage gain is negligible, whereas the number of submitted CIDs increases
+by a factor greater than $2$.
+This stagnation is attributable to the geographic concentration of the Porto
+taxi fleet: trajectories are predominantly located in the city centre, where
+population density is higher, as described in
+Section~\ref{subsec:security-analysis-issues-unused-geography}.
+An overview of the geographical distribution of the submitted data is shown in
+Figure~\ref{fig:proto-evaluation-map-cids-distribution}.
+
+\begin{figure}
+    \centering
+    \includegraphics[width=0.85\linewidth]{diagrams/proto-evaluation-porto-s1000}
+    \caption{Geographical distribution of received CIDs across chunks,
+        overlaid on a map of Porto ($N = 1\text{,}000$ senders).}
+    \label{fig:proto-evaluation-map-cids-distribution}
+\end{figure}
+
+\subsection{Reward decay evaluation}\label{subsec:spatial-decay}
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-heatmap-decay-N500}
+    \caption{Expected reward per chunk for the next CID submission,
+        with $N = 500$ senders and $k \in \{1, 2, 3, 4\}$.}
+    \label{fig:proto-evaluation-map-cids-distribution-s500}
+\end{figure}
+\begin{figure}
+    \centering
+    \includegraphics[width=\linewidth]{diagrams/proto-evaluation-heatmap-decay-N1000}
+    \caption{Expected reward per chunk for the next CID submission,
+        with $N = 1\text{,}000$ senders and $k \in \{1, 2, 3, 4\}$.}
+    \label{fig:proto-evaluation-map-cids-distribution-s1000}
+\end{figure}
+
+Figures~\ref{fig:proto-evaluation-map-cids-distribution-s500}
+and~\ref{fig:proto-evaluation-map-cids-distribution-s1000} show how rewards
+vary as $k$ ranges over $\{1, 2, 3, 4\}$.
+For cold chunks — those with no submissions — the reward remains constant at
+its maximum value of $1\text{,}000\,\text{DST}$.
+For heavily saturated chunks the difference is substantial: on chunk $53$, the
+most saturated one ($\alpha = 0.931$), the expected reward for the next CID is
+$263\,\text{DST}$ with $k = 1$ and $846\,\text{DST}$ with $k = 4$.
+Consequently, a higher value of $k$ yields a higher reward for saturated
+chunks, resulting in a more gradual decay curve.
+
+\subsection{Discussion}\label{subsec:spatial-discussion}
+The simulation is conducted with at most $1\text{,}000$ senders due to RAM
+constraints.
+The results confirm that the decay mechanism operates as designed:
+Equation~\ref{eq:proto-design-reward-determination} in
+Section~\ref{subsec:addressing-issues-geographical-incentive-issue} produces an
+economic signal that incentivises rational senders to contribute to
+underrepresented chunks in order to maximise their reward.
+Furthermore, this experiment confirms that the implementation described in
+Section~\ref{subsec:extended-protocol-introducing-geographical-incentives} is
+correct.
+
 \section{Result and discussion}\label{sec:result-discussion}
+
+The experiments presented in this chapter lead to several conclusions.
+
+Section~\ref{sec:gas-analysis} compares the three contract variants.
+\texttt{FIFO} is infeasible under EIP-7825~\cite{eip7825}: its O($n$) pending
+list removal causes the worst-case gas of \texttt{submitVerifyResult} to exceed
+the per-transaction cap already at moderate CID counts.
+\texttt{PFC} is the most efficient contract, but it does not address the issues
+analysed in Section~\ref{sec:security-analysis-issues}.
+\texttt{PSC} addresses those issues at a measurable but controlled overhead: the
+additional gas introduced by its three extensions remains within the same order
+of magnitude as \texttt{PFC}.
+Across all three contracts, deployment and operation on Ethereum mainnet is
+expensive for the campaign initiator, while sender and verifier costs are
+acceptable.
+On L2 networks the costs become negligible for all roles.
+
+Section~\ref{sec:proto-evaluation-concurrent-execution} shows that $N$ concurrent
+campaigns produce a critical section on block capacity.
+In production, concurrent campaigns should be staggered or deployed on L2 networks
+with a higher block gas limit or a shorter block time to reduce contention.
+
+Section~\ref{sec:spatial-simulation} confirms that the reward decay mechanism
+operates as designed.
+The 50\% spatial coverage observed on the Porto dataset reflects the intrinsic
+geographic concentration of the taxi fleet rather than a protocol limitation.
+The decay parameter $k$ controls the steepness of the incentive curve: higher
+values produce a gentler decay, preserving a meaningful reward even for
+highly saturated chunks, while lower values more aggressively redirect senders
+towards underrepresented areas.

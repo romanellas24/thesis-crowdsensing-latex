@@ -1,4 +1,34 @@
 \chapter*{Abstract}
-Abstract qui (ti consiglio di farlo alla fine)
+Mobile crowdsensing enables the collection of distributed geographic data
+by aggregating contributions from a large number of participants, each
+equipped with a sensing device.
+Existing solutions rely on a centralised server to coordinate the campaign,
+introducing a single point of trust that can compromise data confidentiality
+and participant privacy.
+
+This thesis presents a privacy-preserving decentralised crowdsensing protocol
+in which coordination is delegated to an Ethereum smart contract, replacing
+the trusted server with a publicly verifiable and tamper-resistant intermediary.
+Data confidentiality is achieved through hybrid encryption: each sender
+encrypts their payload with a symmetric key distributed by the campaign
+initiator, and stores the ciphertext on IPFS, publishing only the encrypted
+content identifier on-chain.
+Participation is incentivised through a custom ERC-20 token and a bond
+mechanism, while the campaign area is partitioned into a spatial grid of
+chunks to validate the geographic origin of each submission and prevent
+over-representation of densely populated areas.
+A second contract extends the base protocol by addressing three open issues:
+verifier access to plaintext data before verdict, lack of geographic reward
+incentives, and absence of penalties for incorrect votes.
+
+An empirical evaluation covers gas consumption across multiple networks,
+block capacity contention under concurrent campaign execution, and spatial
+coverage on a real-world taxi trajectory dataset from the city of Porto.
+The results show that the optimised contract reduces verifier gas costs by
+approximately $98\%$ relative to the FIFO baseline, and that the reward
+decay mechanism successfully redirects sender contributions towards
+underrepresented areas.
+On Layer~2 some networks, the cost of participation becomes negligible for all
+roles.
 
 \topmargin=-1cm
