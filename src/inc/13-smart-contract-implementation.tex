@@ -355,7 +355,7 @@ With this implementation the sender enrollment reflects the design choices made 
 
 \subsection{Verifier enrollment}\label{subsec:implementation-verifier-enrollment}
 This Section describes the verifier enrollment phase for the \texttt{PrivacyFirstContract}.
-The extended protocol version is discussed in Sections~\ref{subsec:extended-protocol-extended-verifier-enrollment} and~\ref{subsec:extended-protocol-extended-data-submission} which implement the modifications in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
+The extended protocol version is discussed in Section~\ref{subsec:extended-protocol-extended-verifier-enrollment} which implement the modifications in Section~\ref{subsec:addressing-issues-trusted-verifier-issue}.
 
 In the \texttt{PrivacyFirstContract} the implementation is very similar to the one realized for senders, shown in Section~\ref{subsec:implementation-sender-enrollment}.
 
@@ -730,7 +730,7 @@ contract DataSentTokenContract is ERC20, Ownable {
         \textbf{Aspect} & \textbf{ETH native} & \textbf{ERC-20 (DST)} \\
         \hline
         Deposit mechanism
-        & \texttt{msg.value} su funzione \texttt{payable}
+        & \texttt{msg.value} in payable \texttt{payable}
         & \texttt{approve} + \texttt{transferFrom} \\
         \hline
         Reentrancy risk
@@ -751,7 +751,7 @@ contract DataSentTokenContract is ERC20, Ownable {
         \hline
         Gas per transfer
         &  21.000 gas~\cite{wood2014ethereum}
-        & DA MISURARE! \\ %TODO MISURARE (con GAS REPORTER MISURARE LA TRANSFER FROM).
+        &  $\sim$ 65.000 gas (measured in Table~\ref{tab:proto-evaluation-psc-overhead-1000s-1000v}) \\
         \hline
     \end{tabular}
     \caption{Comparison between ETH native and ERC-20 (DST)}

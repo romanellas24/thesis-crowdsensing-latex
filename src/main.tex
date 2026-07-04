@@ -57,15 +57,15 @@
 
 \lstdefinelanguage{typescript}{
     keywords={abstract, any, as, boolean, break, case, catch, class, console, const, constructor, continue, debugger, declare, default, delete, do, else, enum, export, extends, false, finally, for, from, function, get, if, implements, import, in, instanceof, interface, is, let, module, namespace, new, null, number, of, package, private, protected, public, readonly, require, return, set, static, string, super, switch, this, throw, true, try, type, typeof, var, void, while, with, yield},
-    keywordstyle=\color{blue}\bfseries,
+    keywordstyle=\color{teal}\bfseries,
     ndkeywords={log},
-    ndkeywordstyle=\color{darkgray}\bfseries,
+    ndkeywordstyle=\color{violet}\bfseries,
     identifierstyle=\color{black},
     sensitive=true,
     comment=[l]{//},
     morecomment=[s]{/*}{*/},
-    commentstyle=\color{purple}\ttfamily,
-    stringstyle=\color{red}\ttfamily,
+    commentstyle=\color{gray}\ttfamily,
+    stringstyle=\color{orange}\ttfamily,
     morestring=[b]',
     morestring=[b]"
 }
@@ -94,9 +94,11 @@
         \input{inc/01-dedica}
         \newpage~\newpage
     \fi
-    \input{inc/02-abstract}
+    \input{inc/02-sommario}
     \newpage~\newpage
-    \input{inc/03-indici}
+    \input{inc/03-abstract}
+    \newpage~\newpage
+    \input{inc/04-indici}
     \newpage~\newpage
 
     % settings
@@ -119,8 +121,8 @@
     \renewcommand{\bibsection}{}
     \newpage~\newpage
     \input{inc/19-appendici}
-    \newpage~\newpage
     \ifofficial\else
+    \newpage~\newpage
         \input{inc/99-ringraziamenti}
     \fi
 \end{document}

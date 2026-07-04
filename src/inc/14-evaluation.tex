@@ -288,7 +288,7 @@ protocol of Section~\ref{sec:addressing-issues} that are absent from \texttt{Pri
 \end{table}
 
 \subsection{Real-world deployment costs across networks}\label{subsec:gas-real-world-costs}
-Gas costs exist to prevent replay attacks and to incentivize verifiers to stake their funds and validate new blocks.
+Gas costs exist to prevent replay attacks and to incentivize verifiers to stake their funds and validate new blocks~\cite{wood2014ethereum}.
 The formula to evaluate the USD cost of a certain gas usage is the following:
 \begin{equation}
     \text{GAS}_{\text{COST}} = \text{GAS}_{\text{USED}} \times \text{GAS}_{\text{PRICE}} \times \text{TOKEN}_{\text{COST}}
@@ -300,14 +300,14 @@ Tables~\ref{tab:proto-evaluation-merged-fifo},~\ref{tab:proto-evaluation-merged-
 For verifiers and senders, the gas is calculated per actor; the mean, median, minimum, and maximum gas usage are reported.
 In addition, for each network all gas usage data are reported, while the corresponding gas cost reflects the selected network
 
-The Table~\ref{tab:proto-evaluation-gas-cost} shows the gas cost and the token cost for each network.
+The Table~\ref{tab:proto-evaluation-gas-cost} shows the gas cost and the token cost for each network~\cite{etherscan, polygonscan, arbiscan, optimisticetherscan, gnosisscan, bscscan}.
 The data used are the median values for each category recorded in 2025.
 The median was chosen because it is robust to outliers.
 \begin{table}
     \centering
     \begin{tabular}{|c|c|c|}
         \hline
-        Token & $\text{GAS}_{\text{PRICE}}$ & $\text{TOKEN}_{USD}$ \\
+        Token & $\text{GAS}_{\text{PRICE}}$ & $\text{TOKEN}_{USD}$~\cite{coingecko} \\
         \hline
         Arbitrum (ARB) & $0.0169$ & $0.381549$ \\
         \hline

@@ -9,7 +9,7 @@ The work presented in this thesis covers three main areas: protocol design,
 implementation, and evaluation.
 
 In the design phase, \texttt{PrivacyFirstContract} was developed, building
-on the crowdsensing protocol proposed by Bedogni et al.~\cite{bedogni2024crowdsensing}.
+on the crowdsensing protocol proposed by Bedogni and Ferretti~\cite{bedogni2024crowdsensing}.
 A subsequent security and incentive analysis identified several open issues,
 which were addressed in \texttt{PrivacySecondContract}, an extension that
 introduces a trusted verifier mechanism, a geographical reward decay, and
@@ -52,15 +52,15 @@ are outside the scope of the model, as noted in Appendix~\ref{ch:appendix-c-fifo
 
 Several directions are open for future investigation.
 The centrality of the campaign initiator $B$ could be eliminated by replacing
-the current key distribution mechanism with Proxy Re-Encryption(PRE): senders
+the current key distribution mechanism with Proxy Re-Encryption(PRE)~\cite{ateniese2006pre}: senders
 would encrypt their data under their own public key, and a decentralised proxy
-network, such as the Threshold Network, would re-encrypt each ciphertext
+network, such as the Threshold Network\cite{thresholdnetwork}, would re-encrypt each ciphertext
 for the elected verifier without ever learning the plaintext, removing $B$ as
 an online trust point entirely.
 
 The formal security analysis could be strengthened by extending the ProVerif
 model to cover dishonest enrollment scenarios, or by porting the verification
-to CryptoVerif, which operates in the computational model and provides
+to CryptoVerif~\cite{blanchet2008cryptoverif}, which operates in the computational model and provides
 guarantees over concrete cryptographic primitives rather than perfect symbolic
 abstractions.
 
