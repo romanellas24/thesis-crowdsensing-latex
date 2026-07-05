@@ -11,8 +11,9 @@ implementation, and evaluation.
 In the design phase, \texttt{PrivacyFirstContract} was developed, building
 on the crowdsensing protocol proposed by Bedogni and Ferretti~\cite{bedogni2024crowdsensing}.
 A subsequent security and incentive analysis identified several open issues,
-which were addressed in \texttt{\seqsplit{PrivacySecondContract}}, an extension that
-introduces a geographical reward decay, and a verifier penalty system.
+which were addressed in \texttt{\seqsplit{PrivacySecondContract}},
+an extension that introduces a mechanism restricting each verifier to the data it is elected to verify,
+a geographical reward decay, and a verifier penalty system.
 
 The implementation phase produced two Solidity smart contracts reflecting
 the above design, together with a TypeScript SDK layer that exposes a

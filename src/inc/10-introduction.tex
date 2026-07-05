@@ -23,9 +23,9 @@ protocol reveals several open issues:
 a malicious verifier can decrypt data from any sender, regardless of the slots it is elected to, through the shared decryption key and on-chain visibility,
 the geographic distribution of rewards does not incentivise senders to contribute to underrepresented
 areas, and verifiers who vote incorrectly face no penalty beyond forfeiting their bond.
-A second contract addresses each of these issues in turn, introducing a
-trusted verifier mechanism based on an additional encryption layer, a
-reward decay function that reduces the payout for submissions to already
+A second contract addresses each of these issues in turn, introducing a verifier-access mechanism
+based on an additional encryption layer that restricts each verifier to the data it is elected to verify,
+a reward decay function that reduces the payout for submissions to already
 saturated chunks, and a penalty system that tracks incorrect votes and removes a verifier automatically once a configurable threshold is exceeded, or manually at the campaign initiator's discretion.
 
 The main contributions of this thesis are:
