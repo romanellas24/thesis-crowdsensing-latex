@@ -15,11 +15,9 @@ and stores the ciphertext on IPFS, publishing only the encrypted
 content identifier on-chain.
 Participation is incentivised through a custom ERC-20 token and a bond
 mechanism, while the campaign area is partitioned into a spatial grid of
-chunks to validate the geographic origin of each submission and prevent
-over-representation of densely populated areas.
+chunks so the contract records each submission's geographic origin on-chain and caps the number of submissions accepted per chunk, preventing over-representation of densely populated areas.
 A second contract extends the base protocol by addressing three open issues:
-verifier access to plaintext data before verdict, lack of geographic reward
-incentives, and absence of penalties for incorrect votes.
+verifier access to submitted data at any time through a shared decryption key and on-chain visibility, lack of geographic reward incentives, and absence of penalties for incorrect votes beyond bond loss.
 
 An empirical evaluation covers gas consumption across multiple networks,
 block capacity contention under concurrent campaign execution, and spatial

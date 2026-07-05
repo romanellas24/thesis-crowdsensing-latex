@@ -35,15 +35,14 @@ Il protocollo coinvolge tre attori principali.
 Il campaign initiator, \texttt{B} avvia la campagna, definisce i parametri
 spaziali e distribuisce le chiavi crittografiche.
 I sender raccolgono e inviano i dati geografici.
-I verifier, selezionati casualmente dal contratto, validano le
+I verifier, selezionati dal contratto su loro richiesta tra quelli idonei, validano le
 submission esprimendo un voto di approvazione o rifiuto.
 La partecipazione di sender e verifier è regolata da un meccanismo
 di cauzione tramite token ERC-20 personalizzato, \texttt{DST}: il deposito
 viene restituito al termine della campagna, unitamente al reward,
 solo ai partecipanti onesti.
 
-La riservatezza dei dati è garantita attraverso crittografia
-ibrida.
+La riservatezza dei dati è garantita attraverso crittografia ibrida tra i vari attori, mediati dallo smart contract.
 I dati cifrati vengono archiviati off-chain su IPFS; on-chain viene
 pubblicato esclusivamente il Content Identifier~(CID) cifrato usando la chiave $K_{enc}$.
 
@@ -55,8 +54,7 @@ partecipanti.
 
 Un'analisi di sicurezza e incentivi del protocollo base individua
 tre problemi aperti.
-Primo, un verifier malevolo può accedere ai dati in chiaro prima di
-esprimere il proprio verdetto, falsando la valutazione.
+Primo, un verifier malevolo può accedere ai dati in un qualunque momento a causa delle chiavi distribuite e sfruttando la visibilità della blockchain.
 Secondo, la distribuzione geografica dei reward non incentiva i
 sender a contribuire alle aree meno coperte, favorendo la
 concentrazione nelle zone già sature.
@@ -65,11 +63,13 @@ conseguenza economica, oltre alla perdita del deposito cauzionale.
 
 Un secondo contratto Solidity, \texttt{PSC}, estende il protocollo base
 affrontando ciascuno dei tre problemi.
-Per il problema del verifier malevolo, PSC introduce un ulteriore
+Per il problema del verifier malevolo, \texttt{PSC} introduce un ulteriore
 strato crittografico: \texttt{B}, per ogni dato inviato crea una coppia di chiavi asimmetriche.
-Quindi \texttt{B} decifra il dato inviato, riesegue l'upload del dato cifrato su IPFS e successivamente attraverso la chiave pubblica dei verificatori eletti distribuisce la chiave di decrittazione del dato da verificare.
+Quindi \texttt{B} decifra il dato inviato, lo ri-cifra con la nuova coppia di chiavi per-dato e lo ricarica su IPFS;
+quando un verifier viene eletto, \texttt{B} gli consegna la relativa chiave di decrittazione cifrata sotto la chiave pubblica del verifier eletto,
+così che solo lui possa accedere al dato.
 
-Per lo squilibrio geografico dei reward, PSC implementa una funzione
+Per lo squilibrio geografico dei reward, \texttt{PSC} implementa una funzione
 di decadimento basata sul rapporto di saturazione del chunk: il
 reward per una submission verso un chunk già parzialmente saturo
 viene ridotto secondo la formula~$(1 - \alpha)^{1/2^k}$, dove
@@ -80,9 +80,9 @@ La radice frazionaria viene calcolata on-chain tramite il metodo
 babilonese iterativo, evitando operazioni in virgola mobile non
 supportate dall'EVM.
 
-Per l'assenza di penalità, PSC traccia i voti corretti e scorretti
-di ciascun verifier e consente al campaign initiator di espellere
-i verifier che superano una soglia configurabile di voti errati.
+Per l'assenza di penalità, \texttt{PSC} traccia i voti corretti e scorretti di ciascun verifier:
+al superamento di una soglia configurabile di voti errati, il verifier viene rimosso automaticamente e,
+inoltre, il campaign initiator può espellere i verifier manualmente.
 
 L'implementazione comprende i due contratti Solidity documentati,
 un SDK TypeScript che espone un'API per-attore e gestisce le
@@ -97,14 +97,13 @@ l'eliminazione dei dati di enrollment tramite \texttt{delete} dopo
 il loro utilizzo.
 
 La valutazione empirica copre tre dimensioni.
-L'analisi dei costi di gas su 16~scenari, con sender e verifier
-nell'intervallo~$\{1, 10, 100, 1000\}$, mostra che il contratto
-ottimizzato riduce i costi del verifier del~98\% rispetto alla
+L'analisi dei costi di gas su 16~scenari, con sender in~$\{1, 10, 100, 1000\}$ e verifier in~$\{2, 10, 100, 1000\}$,
+mostra che il contratto ottimizzato riduce i costi del verifier del~98\% rispetto alla
 baseline FIFO.
 La baseline FIFO risulta non praticabile su reti Fusaka-era in tutti
 i 16~scenari, superando il limite per-transazione di~$2^{24}$~gas
 introdotto dall'EIP-7825 di un fattore~$3.4\times$.
-PSC aggiunge un overhead contenuto rispetto a PFC, con l'incremento
+\texttt{PSC} aggiunge un overhead contenuto rispetto a PFC, con l'incremento
 più significativo sulla data submission dovuto al calcolo del reward decaduto.
 
 Su reti L2 quali Arbitrum e Optimism, il costo di partecipazione
@@ -124,7 +123,7 @@ protocollo.
 
 I risultati confermano la fattibilità del protocollo su reti L2
 e su blockchain a basso costo del gas.
-Le direzioni future includono l'eliminazione del trust residuo nel
+Gli sviluppi futuri includono l'eliminazione della fiducia nel
 campaign initiator tramite Proxy Re-Encryption decentralizzata,
 l'estensione della verifica formale a scenari di enrollment
 disonesto, e la validazione su dataset con distribuzione geografica

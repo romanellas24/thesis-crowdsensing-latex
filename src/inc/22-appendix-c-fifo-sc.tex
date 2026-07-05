@@ -25,9 +25,9 @@ decision under study.
 The chosen FIFO strategy is the most natural alternative to swap-and-pop:
 \texttt{\_addToPending} appends to the tail, and \texttt{\_removeFromPending}
 performs a linear scan to locate the entry followed by a left-shift of all
-subsequent elements. The result is an \(\mathcal{O}(n)\) removal that
+subsequent elements. The result is an \(O(n)\) removal that
 preserves the insertion order, in contrast to swap-and-pop's
-\(\mathcal{O}(1)\) removal that does not.
+\(O(1)\) removal that does not.
 
 \begin{lstlisting}[
 language=solidity,

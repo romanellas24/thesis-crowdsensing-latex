@@ -513,13 +513,10 @@ per-campaign values.
 \end{table}
 
 As $N$ increases, each campaign consumes measurably more blocks than it would
-in isolation. At $N = 4$, the mean block count reaches $3.65\times$ the
-single-campaign baseline, approaching the theoretical upper bound of $4\times$
-that would result from complete serialization of all campaigns onto a single
-shared block stream. This directly evidences a critical section on block
+in isolation.
+At $N = 4$, the mean block count reaches $3.65\times$, this directly evidences a critical section on block
 capacity: concurrent campaigns compete for the $60\text{,}000\text{,}000$-gas
-per-block limit~\cite{eip7935}, forcing partial serialization of their
-transactions.
+per-block limit~\cite{eip7935}.
 
 \section{Spatial simulation}\label{sec:spatial-simulation}
 Section~\ref{subsec:addressing-issues-geographical-incentive-issue} describes a
@@ -602,7 +599,7 @@ Figure~\ref{fig:proto-evaluation-map-cids-distribution}.
 Figures~\ref{fig:proto-evaluation-map-cids-distribution-s500}
 and~\ref{fig:proto-evaluation-map-cids-distribution-s1000} show how rewards
 vary as $k$ ranges over $\{1, 2, 3, 4\}$.
-For cold chunks — those with no submissions — the reward remains constant at
+For cold chunks, those with no submissions, the reward remains constant at
 its maximum value of $1\text{,}000\,\text{DST}$.
 For heavily saturated chunks the difference is substantial: on chunk $53$, the
 most saturated one ($\alpha = 0.931$), the expected reward for the next CID is

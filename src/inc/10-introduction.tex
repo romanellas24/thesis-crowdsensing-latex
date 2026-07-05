@@ -11,8 +11,7 @@ The design of the base contract builds on the smart-contract-coordinated crowdse
 Starting from that scheme, this thesis introduces three protocol extensions that address open privacy and incentive issues in the base design.
 
 The protocol partitions the campaign area into a grid of spatial chunks,
-allowing the contract to validate the geographic origin of each submission
-on-chain and to limit the number of data entries accepted per chunk,
+allowing the contract to record the geographic origin of each submission on-chain and to limit the number of data entries accepted per chunk,
 preventing the over-representation of densely populated areas.
 
 Since a smart contract executes deterministically on the EVM and its code is
@@ -20,15 +19,14 @@ publicly verifiable, it replaces the trusted server with a trustless
 intermediary whose behaviour cannot be altered by any single party~\cite{bedogni2024crowdsensing, gigli2024decentralization}.
 
 Despite these properties, a security and incentive analysis of the base
-protocol reveals several open issues: a malicious verifier can learn the
-plaintext data before committing to a verdict, the geographic distribution
-of rewards does not incentivise senders to contribute to underrepresented
-areas, and verifiers who vote incorrectly face no economic consequence.
+protocol reveals several open issues:
+a malicious verifier can decrypt data from any sender, regardless of the slots it is elected to, through the shared decryption key and on-chain visibility,
+the geographic distribution of rewards does not incentivise senders to contribute to underrepresented
+areas, and verifiers who vote incorrectly face no penalty beyond forfeiting their bond.
 A second contract addresses each of these issues in turn, introducing a
 trusted verifier mechanism based on an additional encryption layer, a
 reward decay function that reduces the payout for submissions to already
-saturated chunks, and a penalty system that tracks incorrect votes and
-allows the campaign initiator to remove misbehaving verifiers.
+saturated chunks, and a penalty system that tracks incorrect votes and removes a verifier automatically once a configurable threshold is exceeded, or manually at the campaign initiator's discretion.
 
 The main contributions of this thesis are:
 \begin{itemize}
